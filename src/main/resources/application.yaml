@@ -31,8 +31,8 @@ spring:
     username: root
     password: 123456
 #    url: jdbc:postgresql://rm-cn-cq74sgsb50001ywo.rwlb.rds.aliyuncs.com/yu_ai_agent
-#    username: my_user
-#    password: Aa17875320024
+#    username: your name
+#    password: your password
 
 
 # springdoc-openapi????
