@@ -1,6 +1,6 @@
-spring:
+﻿spring:
   application:
-    name: yu-ai-agent
+    name: my-ai-agent
   profiles:
     active: local
   ai:
@@ -8,30 +8,30 @@ spring:
       api-key: ${AI_DASHSCOPE_API_KEY}
       chat:
         options:
-          model: qwen-plus
+          model: qwen-flash
     vectorstore:
       pgvector:
         index-type: HNSW
         dimensions: 1024
         distance-type: COSINE_DISTANCE
         max-document-batch-size: 10000 # Optional: Maximum number of documents per batch
-    mcp:
-      client:
-        sse:
-          connections:
-            server1:
-              url: http://localhost:8127
+#    mcp:
+#      client:
+#        sse:
+#          connections:
+#            server1:
+#              url: http://localhost:8127
         # stdio:
         # servers-configuration: classpath:mcp-servers.json
 
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/yu-ai-agent
+    url: jdbc:mysql://localhost:3306/my-ai-agent
     username: root
     password: 123456
 #    url: jdbc:postgresql://rm-cn-cq74sgsb50001ywo.rwlb.rds.aliyuncs.com/yu_ai_agent
-#    username: your name
+#    username: your username
 #    password: your password
 
 
@@ -46,7 +46,7 @@ springdoc:
   group-configs:
     - group: 'default'
       paths-to-match: '/**'
-      packages-to-scan: com.lcl.yupiai.controller
+      packages-to-scan: com.lcl.myaiagent.controller
 # knife4j???????????????
 knife4j:
   enable: true
@@ -60,7 +60,7 @@ knife4j:
         group-name: default
         api-rule: package
         api-rule-resources:
-          - com.lcl.yupiai.controller
+          - com.lcl.myaiagent.controller
 server:
   port: 8123
   servlet:

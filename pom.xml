@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-    Yu-AI-Agent 项目 Maven 配置文件
+    My-AI-Agent 项目 Maven 配置文件
     基于 Spring Boot 3.5.13 和 Java 21 构建的 AI 代理应用
     集成 Spring AI Alibaba、DashScope、PgVector 等技术栈
 -->
@@ -15,10 +15,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.lcl</groupId>
-    <artifactId>yu-ai-agent</artifactId>
+    <artifactId>my-ai-agent</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>yu-pi-ai</name>
-    <description>yu-pi-ai</description>
+    <name>my-ai-agent</name>
+    <description>my-ai-agent</description>
     <url/>
     <licenses>
         <license/>
