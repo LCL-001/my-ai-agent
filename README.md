@@ -1,6 +1,6 @@
-# Yu AI Agent
+# My AI Agent
 
-Yu AI Agent 是一个基于 Spring Boot、Spring AI Alibaba 和 Vue 3 构建的 AI 智能体应用。项目包含后端智能体服务、前端聊天界面，以及一个可选的图片搜索 MCP 服务，主要用于演示和实践 AI 对话、SSE 流式输出、工具调用、RAG 知识库和智能体任务执行能力。
+My AI Agent 是一个基于 Spring Boot、Spring AI Alibaba 和 Vue 3 构建的 AI 智能体应用。项目包含后端智能体服务、前端聊天界面，以及一个可选的图片搜索 MCP 服务，主要用于演示和实践 AI 对话、SSE 流式输出、工具调用、RAG 知识库和智能体任务执行能力。
 
 ## 功能特性
 
@@ -9,7 +9,7 @@ Yu AI Agent 是一个基于 Spring Boot、Spring AI Alibaba 和 Vue 3 构建的 
 - SSE 实时响应：前后端通过 Server-Sent Events 实现模型回复的逐步展示。
 - 工具调用能力：内置文件操作、网页搜索、网页抓取、资源下载、PDF 生成、人类询问和任务终止等工具。
 - RAG 知识库：内置恋爱场景知识文档，支持结合向量检索进行增强回答。
-- MCP 扩展：包含 `yu-image-search-mcp` 子项目，可作为 MCP Server 扩展图片搜索能力。
+- MCP 扩展：包含 `image-search-mcp-server` 子项目，可作为 MCP Server 扩展图片搜索能力。
 - API 文档：集成 Knife4j / OpenAPI，便于调试后端接口。
 
 ## 技术栈
@@ -37,7 +37,7 @@ Yu AI Agent 是一个基于 Spring Boot、Spring AI Alibaba 和 Vue 3 构建的 
 
 ```text
 .
-├── src/main/java/com/lcl/yupiai
+├── src/main/java/com/lcl/myaiagent
 │   ├── advisors/          # 自定义 ChatClient Advisor
 │   ├── agent/             # 智能体基类、ReAct Agent、ToolCall Agent、MyManus
 │   ├── app/               # AI 应用核心逻辑，例如 LoveApp
@@ -55,8 +55,8 @@ Yu AI Agent 是一个基于 Spring Boot、Spring AI Alibaba 和 Vue 3 构建的 
 │   ├── mapper/            # MyBatis XML
 │   ├── application.yaml   # 主配置
 │   └── mcp-servers.json   # MCP stdio server 配置示例
-├── yu-ai-agent-frontend   # Vue 3 前端项目
-└── yu-image-search-mcp    # 图片搜索 MCP Server 子项目
+├── my-ai-agent-frontend   # Vue 3 前端项目
+└── image-search-mcp-server    # 图片搜索 MCP Server 子项目
 ```
 
 ## 环境要求
@@ -96,7 +96,7 @@ search-api:
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/yu-ai-agent
+    url: jdbc:mysql://localhost:3306/my-ai-agent
     username: root
     password: 123456
 ```
@@ -122,7 +122,7 @@ spring:
 进入前端目录：
 
 ```powershell
-cd yu-ai-agent-frontend
+cd my-ai-agent-frontend
 npm install
 npm run dev
 ```
@@ -178,10 +178,10 @@ GET http://localhost:8123/api/ai/manus/chat?message=帮我生成一份学习计�
 
 ## MCP 图片搜索服务
 
-项目包含 `yu-image-search-mcp` 子模块，可打包为 MCP Server：
+项目包含 `image-search-mcp-server` 子模块，可打包为 MCP Server：
 
 ```powershell
-cd yu-image-search-mcp
+cd image-search-mcp-server
 .\mvnw.cmd package
 ```
 
@@ -190,14 +190,14 @@ cd yu-image-search-mcp
 ```json
 {
   "mcpServers": {
-    "yu-image-search-mcp": {
+    "image-search-mcp-server": {
       "command": "java",
       "args": [
         "-Dspring.ai.mcp.server.stdio=true",
         "-Dspring.main.web-application-type=none",
         "-Dlogging.pattern.console=",
         "-jar",
-        "yu-image-search-mcp/target/yu-image-search-mcp-0.0.1-SNAPSHOT.jar"
+        "image-search-mcp-server/target/image-search-mcp-server-0.0.1-SNAPSHOT.jar"
       ],
       "env": {}
     }
@@ -218,7 +218,7 @@ cd yu-image-search-mcp
 前端构建检查：
 
 ```powershell
-cd yu-ai-agent-frontend
+cd my-ai-agent-frontend
 npm run build
 ```
 
