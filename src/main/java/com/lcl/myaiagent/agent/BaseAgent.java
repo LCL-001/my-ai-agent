@@ -283,9 +283,16 @@ public abstract class BaseAgent {
             return false;
         }
 
+        // 通过引用查找最后一条 ASSISTANT 消息的位置（不能用 indexOf，因为 equals 是按内容比较）
+        int lastIndex = -1;
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            if (messages.get(i) == lastAssistantMsg) {
+                lastIndex = i;
+                break;
+            }
+        }
         // 计算该 ASSISTANT 消息在历史 ASSISTANT 消息中的重复次数
         int duplicateCount = 0;
-        int lastIndex = messages.indexOf(lastAssistantMsg);
         for (int i = lastIndex - 1; i >= 0; i--) {
             Message msg = messages.get(i);
             if (msg.getMessageType() == MessageType.ASSISTANT

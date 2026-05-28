@@ -68,6 +68,18 @@ public class ToolCallAgent extends ReActAgent {
     }
 
     /**
+     * 调用 LLM，子类可覆盖以适配测试或不同 LLM 实现
+     */
+    protected ChatResponse callLlm(Prompt prompt) {
+        return getChatClient()
+                .prompt(prompt)
+                .system(getSystemPrompt())
+                .toolCallbacks(availableTools)
+                .call()
+                .chatResponse();
+    }
+
+    /**
      * 创建 ChatOptions，子类可覆盖以适配不同 LLM
      */
     protected ChatOptions createChatOptions() {
@@ -97,13 +109,7 @@ public class ToolCallAgent extends ReActAgent {
         List<Message> messageList = getMessageList();
         Prompt prompt = new Prompt(messageList, chatOptions);
         try {
-            // 获取带工具选项的响应
-            ChatResponse chatResponse = getChatClient()
-                    .prompt(prompt)
-                    .system(getSystemPrompt())
-                    .toolCallbacks(availableTools)
-                    .call()
-                    .chatResponse();
+            ChatResponse chatResponse = callLlm(prompt);
             // 记录响应，用于 Act
             this.toolCallChatResponse = chatResponse;
             AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
