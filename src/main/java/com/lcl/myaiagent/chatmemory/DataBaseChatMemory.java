@@ -48,7 +48,7 @@ public class DataBaseChatMemory implements ChatMemory {
     public List<Message> get(@NotNull String conversationId) {
         List<ChatMessage> messageList = chatMessageRepository.lambdaQuery()
                 .eq(ChatMessage::getConversationId, conversationId)
-                .orderByDesc(ChatMessage::getCreateTime)
+                .orderByAsc(ChatMessage::getCreateTime)
                 .list();
         return messageList.stream().map(MessageConverter::toMessage).toList();
     }

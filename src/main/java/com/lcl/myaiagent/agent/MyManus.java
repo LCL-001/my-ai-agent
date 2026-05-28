@@ -47,7 +47,7 @@ public class MyManus extends ToolCallAgent {
                 If you need to actively end the interaction, use the `terminate` tool/function call.
                 """;
         this.setNextStepPrompt(NEXT_STEP_PROMPT);
-        this.setMaxSteps(10);
+        this.setMaxSteps(20);
         // 初始化客户端
         ChatClient chatClient = ChatClient.builder(dashscopeChatModel)
                 .defaultAdvisors(new MyLoggerAdvisor())

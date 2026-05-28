@@ -64,7 +64,14 @@ public class ToolCallAgent extends ReActAgent {
         super();
         this.availableTools = availableTools;
         this.toolCallingManager = ToolCallingManager.builder().build();
-        this.chatOptions = DashScopeChatOptions.builder()
+        this.chatOptions = createChatOptions();
+    }
+
+    /**
+     * 创建 ChatOptions，子类可覆盖以适配不同 LLM
+     */
+    protected ChatOptions createChatOptions() {
+        return DashScopeChatOptions.builder()
                 .withInternalToolExecutionEnabled(false)
                 .build();
     }
@@ -84,8 +91,8 @@ public class ToolCallAgent extends ReActAgent {
     @Override
     public boolean think() {
         if (getNextStepPrompt() != null && !getNextStepPrompt().isEmpty()) {
-            UserMessage userMessage = new UserMessage(getNextStepPrompt());
-            getMessageList().add(userMessage);
+            getMessageList().add(new UserMessage(getNextStepPrompt()));
+            setNextStepPrompt(null);
         }
         List<Message> messageList = getMessageList();
         Prompt prompt = new Prompt(messageList, chatOptions);
@@ -110,9 +117,9 @@ public class ToolCallAgent extends ReActAgent {
                     .collect(Collectors.joining("/n"));
             log.info(toolCallInfo);
             if (toolCallList.isEmpty()) {
-                // 只有不调用工具时，才记录助手信息
+                // 无工具调用时，表示任务完成，记录助手信息并结束
                 getMessageList().add(assistantMessage);
-//                setState(AgentState.FINISHED);
+                setState(AgentState.FINISHED);
                 return false;
             } else {
                 // 需要调用工具时，无需记录助手信息，因为调用工具时会自动记录
@@ -139,11 +146,6 @@ public class ToolCallAgent extends ReActAgent {
      */
     @Override
     public String act() {
-        if (!toolCallChatResponse.hasToolCalls()) {
-//            return "没有工具调用";
-            // 返回上一步的输出
-            return getMessageList().getLast().getText();
-        }
         AssistantMessage assistantMessage = toolCallChatResponse.getResult().getOutput();
         String assistantText = assistantMessage.getText();
         // 调用工具
@@ -197,6 +199,9 @@ public class ToolCallAgent extends ReActAgent {
 
         // 清理工具调用响应缓存（这是临时数据，可以清空）
         this.toolCallChatResponse = null;
+
+        // 重置循环计数器
+        setStuckCount(0);
 
         // 重置状态为空闲，允许再次运行
         // 注意：如果已经是ERROR状态，不要覆盖

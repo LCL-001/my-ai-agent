@@ -27,7 +27,7 @@
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/my-ai-agent
+    url: jdbc:mysql://localhost:3306/yu-ai-agent
     username: root
     password: 123456
 #    url: jdbc:postgresql://rm-cn-cq74sgsb50001ywo.rwlb.rds.aliyuncs.com/yu_ai_agent

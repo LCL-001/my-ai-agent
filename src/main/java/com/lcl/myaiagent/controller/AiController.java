@@ -1,8 +1,13 @@
 package com.lcl.myaiagent.controller;
 
+import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.StrUtil;
 import com.lcl.myaiagent.agent.MyManus;
 import com.lcl.myaiagent.app.LoveApp;
+import com.lcl.myaiagent.chatmemory.DataBaseChatMemory;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.http.MediaType;
@@ -13,8 +18,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
-import java.awt.*;
+import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/ai")
 public class AiController {
@@ -28,16 +34,42 @@ public class AiController {
     @Resource
     private ChatModel dashscopeChatModel;
 
+    @Resource
+    private DataBaseChatMemory dataBaseChatMemory;
+
     /**
-     * 流式调用 Manus 超级智能体
+     * 流式调用 Manus 超级智能体，支持多轮对话记忆
      *
-     * @param message
-     * @return
+     * @param message 用户消息
+     * @param chatId  会话ID（可选，传入时可加载历史记录并持久化新消息）
      */
     @GetMapping("/manus/chat")
-    public SseEmitter doChatWithManus(String message) {
+    public SseEmitter doChatWithManus(String message, String chatId) {
         MyManus manus = new MyManus(allTools, dashscopeChatModel);
-        return manus.runStream(message);
+
+        // 从数据库加载历史消息
+        if (StrUtil.isNotBlank(chatId)) {
+            List<Message> history = dataBaseChatMemory.get(chatId);
+            if (CollUtil.isNotEmpty(history)) {
+//                CollUtil.reverse(history);
+                manus.getMessageList().addAll(history);
+                log.info("Loaded {} history messages for chatId: {}", history.size(), chatId);
+            }
+        }
+
+        SseEmitter emitter = manus.runStream(message);
+
+        // 对话结束后持久化到数据库
+        if (StrUtil.isNotBlank(chatId)) {
+            emitter.onCompletion(() -> {
+                List<Message> messages = manus.getMessageList();
+                dataBaseChatMemory.clear(chatId);
+                dataBaseChatMemory.add(chatId, messages);
+                log.info("Saved {} messages to DB for chatId: {}", messages.size(), chatId);
+            });
+        }
+
+        return emitter;
     }
 
 

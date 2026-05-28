@@ -14,6 +14,6 @@ import ChatRoom from '@/components/ChatRoom.vue'
     seo-title="AI 超级智能体 | My AI Agent"
     seo-description="AI 超级智能体支持任务理解、计划拆解和执行过程流式输出，适合智能体能力验证。"
     seo-keywords="AI 超级智能体,Manus,智能体,SSE,任务拆解,My AI Agent"
-    :with-chat-id="false"
+    :with-chat-id="true"
   />
 </template>

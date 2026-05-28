@@ -49,6 +49,10 @@ public abstract class BaseAgent {
     // 添加重复内容阈值
     private int duplicateThreshold = 2;
 
+    // 陷入循环计数器
+    private int stuckCount = 0;
+    private static final int MAX_STUCK_COUNT = 3;
+
     /**
      * 运行智能体，处理用户输入并返回执行结果
      * <p>
@@ -73,6 +77,8 @@ public abstract class BaseAgent {
         }
         // 更改状态
         this.state = AgentState.RUNNING;
+        // 重置循环计数器
+        this.stuckCount = 0;
         // 记录上下文
         this.messageList.add(new UserMessage(userPrompt));
         // 保存结果列表
@@ -86,6 +92,14 @@ public abstract class BaseAgent {
                 log.info("Executing step: {}/{}", stepNumber, this.maxSteps);
                 // 单步执行
                 String stepResult = this.step();
+                // 检查是否陷入循环
+                if (isStuck()) {
+                    handleStuckState();
+                    if (this.state == AgentState.FINISHED) {
+                        results.add("Terminated: Agent stuck in a loop");
+                        break;
+                    }
+                }
                 String result = "Step " + stepNumber + ": " + stepResult;
                 results.add(result);
             }
@@ -128,13 +142,17 @@ public abstract class BaseAgent {
                 if (this.state != AgentState.IDLE) {
                     emitter.send("错误：无法从该状态运行代理：" + this.state);
                     emitter.complete();
+                    return;
                 }
                 if (StrUtil.isBlank(userPrompt)) {
                     emitter.send("错误：用户提示不能为空。");
                     emitter.complete();
+                    return;
                 }
                 // 更改状态
                 this.state = AgentState.RUNNING;
+                // 重置循环计数器
+                this.stuckCount = 0;
                 // 记录上下文
                 this.messageList.add(new UserMessage(userPrompt));
 
@@ -150,6 +168,10 @@ public abstract class BaseAgent {
                         // 每一步 step 执行完都要检查是否陷入循环
                         if (isStuck()) {
                             handleStuckState();
+                            if (this.state == AgentState.FINISHED) {
+                                emitter.send("检测到循环，智能体已终止");
+                                break;
+                            }
                         }
 //                        String result = "Step " + this.currentStep + ": " + stepResult;
 //                        // 发送每一步的结果
@@ -222,13 +244,20 @@ public abstract class BaseAgent {
      * 处理陷入循环的状态
      */
     protected void handleStuckState() {
+        stuckCount++;
+        if (stuckCount >= MAX_STUCK_COUNT) {
+            log.warn("Agent stuck {} times, forcing termination", stuckCount);
+            this.state = AgentState.FINISHED;
+            return;
+        }
         String stuckPrompt = "观察到重复响应。考虑新策略，避免重复已尝试过的无效路径。";
         this.nextStepPrompt = stuckPrompt + "\n" + (this.nextStepPrompt != null ? this.nextStepPrompt : "");
-        log.warn("Agent detected stuck state. Added prompt: " + stuckPrompt);
+        log.warn("Agent detected stuck state ({} / {}). Added prompt: {}", stuckCount, MAX_STUCK_COUNT, stuckPrompt);
     }
 
     /**
      * 检查代理是否陷入循环
+     * 查找最后一条 ASSISTANT 消息，检测是否与历史 ASSISTANT 消息重复
      *
      * @return 是否陷入循环
      */
@@ -238,17 +267,29 @@ public abstract class BaseAgent {
             return false;
         }
 
-        Message lastMessage = messages.getLast();
-        if (lastMessage.getText() == null || lastMessage.getText().isEmpty()) {
+        // 从末尾查找最后一条 ASSISTANT 消息（跳过 ToolResponseMessage 等）
+        Message lastAssistantMsg = null;
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            Message msg = messages.get(i);
+            if (msg.getMessageType() == MessageType.ASSISTANT) {
+                lastAssistantMsg = msg;
+                break;
+            }
+        }
+
+        if (lastAssistantMsg == null
+                || lastAssistantMsg.getText() == null
+                || lastAssistantMsg.getText().isEmpty()) {
             return false;
         }
 
-        // 计算重复内容出现次数
+        // 计算该 ASSISTANT 消息在历史 ASSISTANT 消息中的重复次数
         int duplicateCount = 0;
-        for (int i = messages.size() - 2; i >= 0; i--) {
+        int lastIndex = messages.indexOf(lastAssistantMsg);
+        for (int i = lastIndex - 1; i >= 0; i--) {
             Message msg = messages.get(i);
-            if (msg.getMessageType() == MessageType.ASSISTANT &&
-                    lastMessage.getText().equals(msg.getText())) {
+            if (msg.getMessageType() == MessageType.ASSISTANT
+                    && lastAssistantMsg.getText().equals(msg.getText())) {
                 duplicateCount++;
             }
         }

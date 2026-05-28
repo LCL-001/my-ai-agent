@@ -81,7 +81,8 @@ public class LoveApp {
         chatClient = ChatClient.builder(dashscopeChatModel)
                 .defaultSystem(SYSTEM_PROMPT)
                 .defaultAdvisors(
-                        MessageChatMemoryAdvisor.builder(chatMemory).build(),// 添加基于内存的对话记忆
+//                        MessageChatMemoryAdvisor.builder(chatMemory).build(),// 添加基于内存的对话记忆
+                        MessageChatMemoryAdvisor.builder(dataBaseChatMemory).build(),// 添加基于mysql的对话记忆
                         // 添加自定义的 Logger Advisor，开启日志，便于观察效果
                         new MyLoggerAdvisor()
 //                        // 添加自定义的推理增强 Advisor

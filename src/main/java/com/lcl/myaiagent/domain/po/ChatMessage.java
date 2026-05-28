@@ -10,7 +10,6 @@ import java.util.Map;
 
 import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
@@ -25,10 +24,9 @@ import org.springframework.ai.chat.messages.MessageType;
  * @since 2026-05-18
  */
 @Data
-@Builder
 @EqualsAndHashCode(callSuper = false)
 @Accessors(chain = true)
-@TableName("chat_message")
+@TableName(value = "chat_message", autoResultMap = true)
 @Schema(name = "ChatMessage对象", description = "聊天消息表")
 public class ChatMessage implements Serializable {
 
