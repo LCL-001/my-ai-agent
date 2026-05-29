@@ -68,6 +68,8 @@ function deleteChat(id) {
 async function handleLogin() {
   if (userStore.isLoggedIn) {
     await userStore.logout()
+    router.push('/chat')
+    return
   }
   router.push('/login')
 }
@@ -78,7 +80,7 @@ async function handleLogin() {
     <!-- Logo -->
     <div class="sidebar-brand" @click="router.push('/chat')">
       <Sparkles :size="22" stroke-width="1.8" />
-      <span>My AI</span>
+      <span>YuLin AI</span>
     </div>
 
     <!-- 新建对话 -->
