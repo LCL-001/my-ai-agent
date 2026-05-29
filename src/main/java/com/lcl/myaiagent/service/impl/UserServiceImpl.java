@@ -1,5 +1,6 @@
 package com.lcl.myaiagent.service.impl;
 
+import cn.hutool.crypto.digest.BCrypt;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.lcl.myaiagent.common.ErrorCode;
@@ -35,7 +36,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             }
             User user = new User();
             user.setUsername(username);
-            user.setPassword(DigestUtil.md5Hex(UserConstant.SALT + password));
+            user.setPassword(BCrypt.hashpw(password, BCrypt.gensalt()));
             user.setUserRole("user");
             save(user);
             return user.getId();
@@ -47,13 +48,28 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (username == null || password == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户名或密码不能为空");
         }
-        String encrypted = DigestUtil.md5Hex(UserConstant.SALT + password);
         User user = lambdaQuery().eq(User::getUsername, username).one();
-        if (user == null || !encrypted.equals(user.getPassword())) {
+        if (user == null || !passwordMatches(password, user.getPassword())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户名或密码错误");
         }
-        request.getSession().setAttribute(UserConstant.USER_LOGIN_STATE, user);
+        // 防 Session 固定攻击：销毁旧会话，创建新会话
+        HttpSession oldSession = request.getSession(false);
+        if (oldSession != null) {
+            oldSession.invalidate();
+        }
+        request.getSession(true).setAttribute(UserConstant.USER_LOGIN_STATE, user);
         return getLoginUserVO(user);
+    }
+
+    /**
+     * 密码校验：BCrypt 优先，兼容旧 MD5 格式
+     */
+    private boolean passwordMatches(String rawPassword, String storedHash) {
+        if (storedHash.startsWith("$2a$")) {
+            return BCrypt.checkpw(rawPassword, storedHash);
+        }
+        // 旧 MD5+salt 格式兼容
+        return storedHash.equals(DigestUtil.md5Hex(UserConstant.SALT + rawPassword));
     }
 
     @Override
@@ -84,7 +100,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public void userLogout(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         if (session != null) {
-            session.removeAttribute(UserConstant.USER_LOGIN_STATE);
+            session.invalidate();
         }
     }
 
