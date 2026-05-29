@@ -38,6 +38,8 @@
     multipart:
       max-file-size: 10MB
       max-request-size: 20MB
+  flyway:
+    baseline-on-migrate: true
 
 # springdoc-openapi????
 springdoc:
@@ -67,6 +69,7 @@ knife4j:
           - com.lcl.myaiagent.controller
 server:
   port: 8123
+  servlet:
     context-path: /api
     session:
       cookie:
