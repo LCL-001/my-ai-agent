@@ -70,6 +70,16 @@ server:
         name: YUAI_SESSION
         path: /
       timeout: 7d
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
 # application.yml
 mybatis-plus:
   configuration:

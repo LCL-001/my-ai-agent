@@ -96,6 +96,11 @@
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Actuator 健康检查与指标监控 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
         <!-- Flyway 数据库版本迁移 -->
         <dependency>
             <groupId>org.flywaydb</groupId>
