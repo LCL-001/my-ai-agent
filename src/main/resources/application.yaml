@@ -9,6 +9,7 @@
       chat:
         options:
           model: qwen-plus-latest
+          timeout: 60s
     vectorstore:
       pgvector:
         index-type: HNSW
@@ -33,7 +34,10 @@
 #    url: jdbc:postgresql://rm-cn-cq74sgsb50001ywo.rwlb.rds.aliyuncs.com/yu_ai_agent
 #    username: your username
 #    password: your password
-
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
 
 # springdoc-openapi????
 springdoc:
@@ -63,7 +67,6 @@ knife4j:
           - com.lcl.myaiagent.controller
 server:
   port: 8123
-  servlet:
     context-path: /api
     session:
       cookie:
