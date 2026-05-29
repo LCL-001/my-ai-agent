@@ -1,10 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import HomeView from '@/views/HomeView.vue'
-import ChatView from '@/views/ChatView.vue'
-import LoginView from '@/views/LoginView.vue'
-import LoveAppView from '@/views/LoveAppView.vue'
-import ManusAppView from '@/views/ManusAppView.vue'
+const ChatView = () => import('@/views/ChatView.vue')
+const LoginView = () => import('@/views/LoginView.vue')
+const LoveAppView = () => import('@/views/LoveAppView.vue')
+const ManusAppView = () => import('@/views/ManusAppView.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),

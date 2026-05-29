@@ -104,22 +104,36 @@ function sendMessage() {
   params.chatId = effectiveChatId.value
 
   const url = createSseUrl(props.endpoint, params)
-  const es = new EventSource(url)
-  eventSource.value = es
+  let retryCount = 0
 
-  es.onopen = () => { connectionState.value = 'open' }
-  es.onmessage = (e) => {
-    if (e.data === '[DONE]' || e.data === 'DONE') { finishStream(); return }
-    pendingText.value += typeof e.data === 'string' ? e.data : ''
-    if (!typingTimer.value) runTypewriter(aiMsg)
-    scrollToBottom()
-  }
-  es.onerror = () => {
-    if (aiMsg.content.length === 0) {
-      aiMsg.content = '连接中断，请重试'
+  function connect() {
+    const es = new EventSource(url)
+    eventSource.value = es
+
+    es.onopen = () => {
+      retryCount = 0
+      connectionState.value = 'open'
     }
-    finishStream()
+    es.onmessage = (e) => {
+      if (e.data === '[DONE]' || e.data === 'DONE') { finishStream(); return }
+      pendingText.value += typeof e.data === 'string' ? e.data : ''
+      if (!typingTimer.value) runTypewriter(aiMsg)
+      scrollToBottom()
+    }
+    es.onerror = () => {
+      es.close()
+      if (retryCount < 2 && aiMsg.content.length === 0) {
+        retryCount++
+        setTimeout(connect, 2000)
+        return
+      }
+      if (aiMsg.content.length === 0) {
+        aiMsg.content = '连接中断，请重试'
+      }
+      finishStream()
+    }
   }
+  connect()
 }
 
 function finishStream() {

@@ -8,12 +8,15 @@ export const api = axios.create({
   withCredentials: true,
 })
 
-// 响应拦截器：解析业务错误码，非 0 视为异常
+// 响应拦截器：解析业务错误码，非 0 视为异常；401 自动跳转登录
 api.interceptors.response.use(
   (response) => {
     const data = response.data
-    // 只有 JSON 格式且 code 字段存在且不为 0 时才拦截
     if (data && typeof data === 'object' && 'code' in data && data.code !== 0) {
+      if (data.code === 40100) {
+        window.location.href = '/login'
+        return Promise.reject(new Error('未登录'))
+      }
       const err = new Error(data.message || '请求失败')
       err.response = response
       return Promise.reject(err)
