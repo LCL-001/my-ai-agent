@@ -18,11 +18,6 @@ spring:
     store-type: redis
     redis:
       namespace: "yuai:session"
-  flyway:
-    enabled: true
-    baseline-on-migrate: true
-    repair-on-migrate: true
-    baseline-on-migrate: true
   ai:
     dashscope:
       api-key: ${AI_DASHSCOPE_API_KEY}
