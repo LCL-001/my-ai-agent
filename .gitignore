@@ -39,6 +39,7 @@ build/
 !**/src/test/**/build/
 
 CLAUDE.md
+.env
 
 ### VS Code ###
 .vscode/
