@@ -14,7 +14,11 @@ api.interceptors.response.use(
     const data = response.data
     if (data && typeof data === 'object' && 'code' in data && data.code !== 0) {
       if (data.code === 40100) {
-        window.location.href = '/login'
+        // 跳过 /user/current 的 401（该接口预期在未登录时返回 401）
+        const isCurrentUser = response.config.url?.includes('/user/current')
+        if (!isCurrentUser) {
+          window.location.href = '/login'
+        }
         return Promise.reject(new Error('未登录'))
       }
       const err = new Error(data.message || '请求失败')

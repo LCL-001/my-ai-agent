@@ -13,6 +13,9 @@ const password = ref('')
 const checkPassword = ref('')
 const errorMsg = ref('')
 const busy = ref(false)
+const focusUser = ref(false)
+const focusPwd = ref(false)
+const focusCheck = ref(false)
 
 const title = computed(() => isLogin.value ? '欢迎回来' : '创建账号')
 const subtitle = computed(() => isLogin.value ? '登录以同步你的会话记录' : '注册后即可使用全部功能')
@@ -65,18 +68,27 @@ async function submit() {
       <form class="login-form" @submit.prevent="submit">
         <div class="input-group">
           <User :size="18" class="input-icon" />
-          <input v-model="username" placeholder="用户名" autocomplete="username" required />
+          <input v-model="username"
+            :placeholder="focusUser ? '不少于2位' : '用户名'"
+            @focus="focusUser = true" @blur="focusUser = false"
+            autocomplete="username" required />
         </div>
 
         <div class="input-group">
           <Lock :size="18" class="input-icon" />
-          <input v-model="password" type="password" placeholder="密码" autocomplete="current-password" required />
+          <input v-model="password" type="password"
+            :placeholder="focusPwd ? '不少于6位' : '密码'"
+            @focus="focusPwd = true" @blur="focusPwd = false"
+            autocomplete="current-password" required />
         </div>
 
         <Transition name="fade">
           <div v-if="!isLogin" class="input-group">
             <Lock :size="18" class="input-icon" />
-            <input v-model="checkPassword" type="password" placeholder="确认密码" required />
+            <input v-model="checkPassword" type="password"
+              :placeholder="focusCheck ? '与密码保持一致' : '确认密码'"
+              @focus="focusCheck = true" @blur="focusCheck = false"
+              required />
           </div>
         </Transition>
 

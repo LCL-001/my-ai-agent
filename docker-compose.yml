@@ -2,6 +2,7 @@ version: '3.8'
 services:
   mysql:
     image: mysql:8.0
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
       MYSQL_DATABASE: yu-ai-agent
@@ -9,6 +10,7 @@ services:
       - mysql_data:/var/lib/mysql
     ports:
       - "3306:3306"
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -19,6 +21,7 @@ services:
     image: redis:7-alpine
     volumes:
       - redis_data:/data
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -36,13 +39,14 @@ services:
       SEARCH_API_KEY: ${SEARCH_API_KEY}
     ports:
       - "8123:8123"
+    restart: unless-stopped
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8123/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8123/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -54,6 +58,7 @@ services:
       - ./my-ai-agent-frontend/dist:/usr/share/nginx/html:ro
     ports:
       - "80:80"
+    restart: unless-stopped
     depends_on:
       - backend
 
