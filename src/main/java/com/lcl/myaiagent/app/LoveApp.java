@@ -107,7 +107,11 @@ public class LoveApp {
         return chatClient
                 .prompt()
                 .user(message)
-                .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, chatId))
+                .advisors(spec -> {
+                    if (chatId != null) {
+                        spec.param(ChatMemory.CONVERSATION_ID, chatId);
+                    }
+                })
                 .stream()
                 .content();
     }
@@ -124,7 +128,11 @@ public class LoveApp {
         ChatResponse response = chatClient
                 .prompt()
                 .user(message)
-                .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, conversationId))
+                .advisors(spec -> {
+                    if (conversationId != null) {
+                        spec.param(ChatMemory.CONVERSATION_ID, conversationId);
+                    }
+                })
                 .call()
                 .chatResponse();
         String content = response.getResult().getOutput().getText();

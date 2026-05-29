@@ -1,344 +1,475 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
-import { ArrowLeft, Bot, Copy, HeartPulse, RefreshCw, Send, Square, UserRound, Wifi, WifiOff } from 'lucide-vue-next'
-
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Bot, Copy, Download, RefreshCw, Send, Square, UserRound } from 'lucide-vue-next'
 import { createSseUrl } from '@/api/client'
-import { useSeo } from '@/composables/useSeo'
+import api from '@/api/client'
 
 const props = defineProps({
-  appKey: {
-    type: String,
-    required: true,
-  },
-  title: {
-    type: String,
-    required: true,
-  },
-  subtitle: {
-    type: String,
-    required: true,
-  },
-  endpoint: {
-    type: String,
-    required: true,
-  },
-  accent: {
-    type: String,
-    default: 'coral',
-  },
-  greeting: {
-    type: String,
-    required: true,
-  },
-  aiName: {
-    type: String,
-    default: 'AI',
-  },
-  seoTitle: {
-    type: String,
-    required: true,
-  },
-  seoDescription: {
-    type: String,
-    required: true,
-  },
-  seoKeywords: {
-    type: String,
-    required: true,
-  },
-  withChatId: {
-    type: Boolean,
-    default: false,
-  },
+  endpoint: { type: String, required: true },
+  greeting: { type: String, required: true },
+  aiName: { type: String, default: 'AI' },
+  chatId: { type: String, default: null },
 })
 
-useSeo({
-  title: props.seoTitle,
-  description: props.seoDescription,
-  keywords: props.seoKeywords,
-})
+const localChatId = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)
+const effectiveChatId = computed(() => props.chatId || localChatId)
 
-const messages = ref([
-  {
-    id: `welcome-${props.appKey}`,
-    role: 'assistant',
-    content: props.greeting,
-  },
-])
+const messages = ref([])
 const input = ref('')
-const chatId = ref(createChatId())
 const isStreaming = ref(false)
 const connectionState = ref('idle')
-const errorText = ref('')
+const pendingText = ref('')
+const typingTimer = ref(null)
+const drainTimer = ref(null)
+const activeMsgId = ref(null)
 const scrollPanel = ref(null)
-const TYPE_SPEED_MS = 18
-let eventSource = null
-let typingTimer = null
-let pendingText = ''
-let activeAssistantMessageIndex = -1
-let streamFinished = false
+const textareaRef = ref(null)
+const eventSource = ref(null)
+const TYPE_SPEED_MS = 16
 
-const canSend = computed(() => input.value.trim().length > 0 && !isStreaming.value)
-const stateLabel = computed(() => {
-  if (connectionState.value === 'open') return '响应中'
-  if (connectionState.value === 'error') return '连接中断'
-  return '待命'
-})
-const aiAvatarIcon = computed(() => (props.accent === 'coral' ? HeartPulse : Bot))
-
-function createChatId() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID()
+/* ---- 历史消息加载 ---- */
+async function loadHistory() {
+  if (!props.chatId) {
+    messages.value = [{ id: 'welcome', role: 'assistant', content: props.greeting }]
+    return
   }
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  try {
+    const res = await api.get(`/conversations/${props.chatId}/messages`)
+    const list = res.data.data || []
+    if (list.length > 0) {
+      messages.value = list.map(m => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+      }))
+    } else {
+      messages.value = [{ id: 'welcome', role: 'assistant', content: props.greeting }]
+    }
+  } catch {
+    messages.value = [{ id: 'welcome', role: 'assistant', content: props.greeting }]
+  }
+  nextTick(() => scrollToBottom())
 }
 
-async function scrollToBottom() {
-  await nextTick()
-  if (scrollPanel.value) {
-    scrollPanel.value.scrollTop = scrollPanel.value.scrollHeight
-  }
-}
+onMounted(() => loadHistory())
+watch(() => props.chatId, () => loadHistory())
 
-function normalizeChunk(chunk) {
-  if (!chunk) return ''
-  if (chunk.trim() === '[DONE]' || chunk.trim() === 'DONE') return ''
-  return chunk
-}
-
-function closeEventSource() {
-  if (eventSource) {
-    eventSource.close()
-    eventSource = null
+/* ---- 打字机 ---- */
+function runTypewriter(msg) {
+  if (pendingText.value.length === 0) {
+    typingTimer.value = null
+    return
   }
+  const char = pendingText.value.charAt(0)
+  pendingText.value = pendingText.value.slice(1)
+  const m = messages.value.find(x => x.id === msg.id)
+  if (m) m.content += char
+  typingTimer.value = setTimeout(() => runTypewriter(msg), TYPE_SPEED_MS)
 }
 
 function clearTypewriter() {
-  if (typingTimer) {
-    window.clearTimeout(typingTimer)
-    typingTimer = null
-  }
-  pendingText = ''
-  activeAssistantMessageIndex = -1
-  streamFinished = false
+  if (typingTimer.value) { clearTimeout(typingTimer.value); typingTimer.value = null }
+  if (drainTimer.value) { clearTimeout(drainTimer.value); drainTimer.value = null }
+  pendingText.value = ''
 }
 
 function finishWhenQueueEmpty() {
-  if (!streamFinished || pendingText || typingTimer) return
-  activeAssistantMessageIndex = -1
-  isStreaming.value = false
-  if (connectionState.value !== 'error') {
-    connectionState.value = 'idle'
-  }
-}
-
-function getActiveAssistantMessage() {
-  if (activeAssistantMessageIndex < 0) return null
-  return messages.value[activeAssistantMessageIndex] || null
-}
-
-function runTypewriter() {
-  if (typingTimer || !getActiveAssistantMessage()) return
-
-  if (!pendingText) {
-    finishWhenQueueEmpty()
+  if (pendingText.value.length > 0) {
+    drainTimer.value = setTimeout(finishWhenQueueEmpty, 50)
     return
   }
-
-  typingTimer = window.setTimeout(async () => {
-    typingTimer = null
-    const message = getActiveAssistantMessage()
-    if (!message) return
-
-    message.content += pendingText.slice(0, 1)
-    pendingText = pendingText.slice(1)
-    await scrollToBottom()
-    runTypewriter()
-  }, TYPE_SPEED_MS)
+  isStreaming.value = false
+  connectionState.value = 'idle'
+  activeMsgId.value = null
 }
 
-function queueAssistantText(text) {
-  pendingText += text
-  runTypewriter()
+/* ---- SSE ---- */
+function sendMessage() {
+  const text = input.value.trim()
+  if (!text || isStreaming.value) return
+  input.value = ''
+  composerHeight.value = 80
+  autoResize()
+
+  const userMsg = { id: `u-${Date.now()}`, role: 'user', content: text }
+  const aiMsg = { id: `a-${Date.now()}`, role: 'assistant', content: '' }
+  messages.value.push(userMsg, aiMsg)
+  activeMsgId.value = aiMsg.id
+  isStreaming.value = true
+  connectionState.value = 'connecting'
+
+  nextTick(() => scrollToBottom())
+
+  const params = { message: text }
+  params.chatId = effectiveChatId.value
+
+  const url = createSseUrl(props.endpoint, params)
+  const es = new EventSource(url)
+  eventSource.value = es
+
+  es.onopen = () => { connectionState.value = 'open' }
+  es.onmessage = (e) => {
+    if (e.data === '[DONE]' || e.data === 'DONE') { finishStream(); return }
+    pendingText.value += typeof e.data === 'string' ? e.data : ''
+    if (!typingTimer.value) runTypewriter(aiMsg)
+    scrollToBottom()
+  }
+  es.onerror = () => {
+    if (aiMsg.content.length === 0) {
+      aiMsg.content = '连接中断，请重试'
+    }
+    finishStream()
+  }
 }
 
 function finishStream() {
-  closeEventSource()
-  streamFinished = true
+  if (eventSource.value) { eventSource.value.close(); eventSource.value = null }
   finishWhenQueueEmpty()
 }
 
 function stopStreaming() {
-  closeEventSource()
+  if (eventSource.value) { eventSource.value.close(); eventSource.value = null }
   clearTypewriter()
   isStreaming.value = false
   connectionState.value = 'idle'
+  activeMsgId.value = null
 }
 
-function resetSession() {
-  stopStreaming()
-  chatId.value = createChatId()
-  connectionState.value = 'idle'
-  errorText.value = ''
-  messages.value = [
-    {
-      id: `welcome-${props.appKey}-${chatId.value}`,
-      role: 'assistant',
-      content: props.greeting,
-    },
-  ]
-  scrollToBottom()
+/* ---- 工具 ---- */
+function scrollToBottom() {
+  nextTick(() => {
+    if (scrollPanel.value) scrollPanel.value.scrollTop = scrollPanel.value.scrollHeight
+  })
 }
 
-async function sendMessage() {
-  const text = input.value.trim()
-  if (!text || isStreaming.value) return
-
-  stopStreaming()
-  errorText.value = ''
-  connectionState.value = 'connecting'
-  streamFinished = false
-
-  const userMessage = {
-    id: `${Date.now()}-user`,
-    role: 'user',
-    content: text,
-  }
-  const assistantMessage = {
-    id: `${Date.now()}-assistant`,
-    role: 'assistant',
-    content: '',
-  }
-
-  messages.value.push(userMessage, assistantMessage)
-  activeAssistantMessageIndex = messages.value.length - 1
-  input.value = ''
-  isStreaming.value = true
-  await scrollToBottom()
-
-  const params = props.withChatId ? { message: text, chatId: chatId.value } : { message: text }
-  eventSource = new EventSource(createSseUrl(props.endpoint, params))
-
-  eventSource.onopen = () => {
-    connectionState.value = 'open'
-  }
-
-  eventSource.onmessage = async (event) => {
-    const chunk = normalizeChunk(event.data)
-    if (!chunk) {
-      if (event.data?.trim() === '[DONE]' || event.data?.trim() === 'DONE') {
-        finishStream()
-      }
-      return
-    }
-    queueAssistantText(chunk)
-  }
-
-  eventSource.onerror = () => {
-    const message = getActiveAssistantMessage()
-    if (!message?.content && !pendingText) {
-      clearTypewriter()
-      messages.value[messages.value.length - 1].content = '本次连接没有收到有效内容，请确认后端服务已启动并允许 SSE 访问。'
-      errorText.value = 'SSE 连接异常，请检查 http://localhost:8123/api。'
-      connectionState.value = 'error'
-      closeEventSource()
-      isStreaming.value = false
-    } else {
-      finishStream()
-    }
-    scrollToBottom()
-  }
-}
-
-function handleEnter(event) {
-  if (event.shiftKey) return
-  event.preventDefault()
+function handleEnter(e) {
+  if (e.key !== 'Enter') return
+  if (e.shiftKey) return
+  e.preventDefault()
   sendMessage()
 }
 
-async function copyChatId() {
-  if (!props.withChatId || !navigator.clipboard) return
-  await navigator.clipboard.writeText(chatId.value)
+const composerHeight = ref(80)
+const isDragging = ref(false)
+const dragStartY = ref(0)
+const dragStartHeight = ref(0)
+
+function autoResize(forcedHeight) {
+  nextTick(() => {
+    const el = textareaRef.value
+    if (!el) return
+    el.style.height = 'auto'
+    const h = forcedHeight || Math.min(el.scrollHeight, composerHeight.value)
+    el.style.height = h + 'px'
+  })
 }
 
+function onDragStart(e) {
+  isDragging.value = true
+  dragStartY.value = e.clientY
+  dragStartHeight.value = composerHeight.value
+  document.addEventListener('mousemove', onDragMove)
+  document.addEventListener('mouseup', onDragEnd)
+  e.preventDefault()
+}
+
+function onDragMove(e) {
+  if (!isDragging.value) return
+  const delta = dragStartY.value - e.clientY
+  composerHeight.value = Math.max(40, Math.min(dragStartHeight.value + delta, 400))
+  autoResize(composerHeight.value)
+}
+
+function onDragEnd() {
+  isDragging.value = false
+  document.removeEventListener('mousemove', onDragMove)
+  document.removeEventListener('mouseup', onDragEnd)
+}
+
+function handleInput() {
+  autoResize()
+  scrollToBottom()
+}
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+
+function extractPdfName(content) {
+  const m = content.match(/([\w一-鿿\-\ _]+\.pdf)/i)
+  return m ? m[1].trim() : null
+}
+
+function downloadPdf(name) {
+  window.open(`${API_BASE}/files/download?name=${encodeURIComponent(name)}`, '_blank')
+}
+
+function copyMessage(content) {
+  navigator.clipboard?.writeText(content)
+}
+
+/* ---- 生命周期 ---- */
 onBeforeUnmount(() => {
-  stopStreaming()
+  if (eventSource.value) eventSource.value.close()
+  clearTypewriter()
 })
 </script>
 
 <template>
-  <main class="chat-page" :class="accent">
-    <header class="chat-topbar">
-      <RouterLink class="icon-button back-button" to="/" aria-label="返回主页" title="返回主页">
-        <ArrowLeft :size="22" />
-      </RouterLink>
-
-      <div class="chat-heading">
-        <p>{{ title }}</p>
-        <h1>{{ subtitle }}</h1>
-      </div>
-
-      <div class="session-panel">
-        <span class="stream-state" :class="connectionState">
-          <Wifi v-if="connectionState === 'open'" :size="16" />
-          <WifiOff v-else :size="16" />
-          {{ stateLabel }}
-        </span>
-        <button class="icon-button" type="button" aria-label="开启新会话" title="开启新会话" @click="resetSession">
-          <RefreshCw :size="19" />
-        </button>
+  <div class="chatroom">
+    <!-- 头部 -->
+    <header class="chat-header">
+      <div class="chat-header-info">
+        <div class="chat-avatar">
+          <Bot :size="20" stroke-width="1.8" />
+        </div>
+        <div>
+          <h2>{{ aiName }}</h2>
+          <span :class="['status-dot', connectionState]" />
+          <span class="status-text">
+            {{ connectionState === 'open' ? '在线' : connectionState === 'connecting' ? '连接中' : '就绪' }}
+          </span>
+        </div>
       </div>
     </header>
 
-    <section class="chat-layout">
-      <aside class="conversation-meta" aria-label="会话信息">
-        <span class="meta-label">Session</span>
-        <strong>{{ withChatId ? '聊天室 ID' : '智能体通道' }}</strong>
-        <code>{{ withChatId ? chatId : 'manus-stream' }}</code>
-        <button v-if="withChatId" class="ghost-button" type="button" @click="copyChatId">
-          <Copy :size="16" />
-          复制 ID
-        </button>
-      </aside>
-
-      <section class="chat-window" aria-label="聊天窗口">
-        <div ref="scrollPanel" class="message-list">
-          <article
-            v-for="message in messages"
-            :key="message.id"
-            class="message-row"
-            :class="message.role"
-          >
-            <div class="message-avatar" :class="message.role" aria-hidden="true">
-              <component :is="message.role === 'user' ? UserRound : aiAvatarIcon" :size="21" />
-            </div>
-            <div class="message-stack">
-              <span class="speaker">{{ message.role === 'user' ? 'Navigator' : aiName }}</span>
-              <div class="bubble">
-                <p>{{ message.content || '正在生成...' }}</p>
-              </div>
-            </div>
-          </article>
+    <!-- 消息列表 -->
+    <div ref="scrollPanel" class="chat-messages">
+      <TransitionGroup name="fade">
+        <div
+          v-for="msg in messages"
+          v-show="msg.content"
+          :key="msg.id"
+          :class="['message', msg.role]"
+        >
+          <div class="message-avatar">
+            <UserRound v-if="msg.role === 'user'" :size="16" />
+            <Bot v-else :size="16" />
+          </div>
+          <div class="message-bubble">
+            <div class="message-text">{{ msg.content }}</div>
+            <!-- 流式加载动画 -->
+            <span v-if="msg.id === activeMsgId && isStreaming" class="typing-cursor">|</span>
+            <button
+              v-if="msg.role === 'assistant' && extractPdfName(msg.content)"
+              class="pdf-btn"
+              @click="downloadPdf(extractPdfName(msg.content))"
+              title="下载 PDF"
+            >
+              <Download :size="14" />
+            </button>
+            <button
+              v-if="msg.role === 'assistant' && msg.content && msg.id !== activeMsgId"
+              class="copy-btn"
+              @click="copyMessage(msg.content)"
+              title="复制"
+            >
+              <Copy :size="13" />
+            </button>
+          </div>
         </div>
+      </TransitionGroup>
+    </div>
 
-        <p v-if="errorText" class="error-line">{{ errorText }}</p>
-
-        <form class="composer" @submit.prevent="sendMessage">
-          <textarea
-            v-model="input"
-            rows="1"
-            placeholder="输入消息，Enter 发送，Shift + Enter 换行"
-            :disabled="isStreaming"
-            @keydown.enter="handleEnter"
-          />
-          <button v-if="isStreaming" class="send-button stop" type="button" aria-label="停止生成" @click="stopStreaming">
-            <Square :size="18" />
-          </button>
-          <button v-else class="send-button" type="submit" :disabled="!canSend" aria-label="发送消息">
-            <Send :size="18" />
-          </button>
-        </form>
-      </section>
-    </section>
-  </main>
+    <!-- 输入区 -->
+    <div class="chat-composer" :style="{ '--composer-h': composerHeight + 'px' }">
+      <div
+        class="composer-handle"
+        @mousedown="onDragStart"
+        :class="{ dragging: isDragging }"
+      />
+      <div class="composer-inner">
+        <textarea
+          ref="textareaRef"
+          v-model="input"
+          :placeholder="isStreaming ? 'AI 正在回复...' : '输入消息，Enter 发送，Shift+Enter 换行'"
+          :disabled="isStreaming"
+          rows="1"
+          @keydown="handleEnter"
+          @input="handleInput"
+        />
+        <button
+          v-if="isStreaming"
+          class="send-btn stop"
+          @click="stopStreaming"
+          title="停止生成"
+        >
+          <Square :size="16" fill="#fff" />
+        </button>
+        <button
+          v-else
+          class="send-btn"
+          :disabled="!input.trim()"
+          @click="sendMessage"
+          title="发送"
+        >
+          <Send :size="17" />
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
+
+<style scoped>
+.chatroom {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+}
+
+/* ---- 头部 ---- */
+.chat-header {
+  flex-shrink: 0;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+}
+.chat-header-info { display: flex; align-items: center; gap: 12px; }
+.chat-avatar {
+  width: 38px; height: 38px;
+  background: linear-gradient(135deg, var(--accent), #a855f7);
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+}
+.chat-header-info h2 { font-size: 16px; font-weight: 700; }
+.status-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  margin-right: 4px; vertical-align: middle;
+  background: var(--text-muted);
+}
+.status-dot.open { background: var(--success); animation: pulse 2s infinite; }
+.status-dot.connecting { background: var(--warning); animation: pulse 1s infinite; }
+.status-text { font-size: 12px; color: var(--text-muted); vertical-align: middle; }
+
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+
+/* ---- 消息列表 ---- */
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+.message {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  animation: msg-in .35s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes msg-in { from { opacity: 0; transform: translateY(12px) scale(.97); } }
+
+.message.user { flex-direction: row-reverse; }
+.message-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+}
+.message.user .message-avatar { background: var(--accent); color: #fff; }
+.message-bubble {
+  max-width: 70%;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  position: relative;
+  transition: box-shadow .2s;
+}
+.message.assistant .message-bubble {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+  box-shadow: var(--shadow-sm);
+}
+.message.user .message-bubble {
+  background: linear-gradient(135deg, var(--accent), #7c3aed);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+.message-text { font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+.typing-cursor { display: inline; animation: blink .8s infinite; font-weight: 300; color: var(--accent); }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+.copy-btn {
+  position: absolute; bottom: -20px; right: 0;
+  padding: 2px 6px; color: var(--text-muted);
+  font-size: 11px; opacity: 0; transition: opacity .15s;
+}
+.message-bubble:hover .copy-btn { opacity: 1; }
+.copy-btn:hover { color: var(--accent); }
+.pdf-btn {
+  position: absolute; bottom: -22px; right: 28px;
+  padding: 2px 6px; color: var(--accent);
+  font-size: 11px; opacity: 0; transition: opacity .15s;
+}
+.message-bubble:hover .pdf-btn { opacity: 1; }
+.pdf-btn:hover { color: var(--accent-hover); }
+
+/* ---- 输入区 ---- */
+.chat-composer {
+  flex-shrink: 0;
+  padding: 4px 24px 20px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  user-select: none;
+}
+.composer-handle {
+  height: 16px;
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+.composer-handle::after {
+  content: '';
+  width: 32px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  pointer-events: none;
+  transition: background .15s, width .15s;
+}
+.composer-handle:hover::after,
+.composer-handle.dragging::after {
+  background: var(--accent);
+  width: 48px;
+}
+.composer-inner {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border-radius: var(--radius);
+  border: 2px solid transparent;
+  transition: border var(--transition), box-shadow var(--transition);
+}
+.composer-inner:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+  background: #fff;
+}
+.composer-inner textarea {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 24px;
+  background: transparent;
+  color: var(--text);
+  transition: height .15s ease;
+}
+.composer-inner textarea::placeholder { color: var(--text-muted); }
+.send-btn {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  background: var(--accent);
+  color: #fff;
+  transition: all var(--transition-spring);
+}
+.send-btn:hover:not(:disabled) { transform: scale(1.1); background: var(--accent-hover); }
+.send-btn:disabled { opacity: .4; cursor: default; }
+.send-btn.stop { background: var(--danger); }
+.send-btn.stop:hover { background: var(--danger); transform: scale(1.1); }
+</style>

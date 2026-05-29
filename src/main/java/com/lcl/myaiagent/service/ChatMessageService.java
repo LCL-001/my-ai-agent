@@ -1,6 +1,6 @@
 package com.lcl.myaiagent.service;
 
-import com.lcl.myaiagent.domain.po.ChatMessage;
+import com.lcl.myaiagent.model.po.ChatMessage;
 import com.baomidou.mybatisplus.extension.service.IService;
 
 /**
@@ -13,4 +13,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
  */
 public interface ChatMessageService extends IService<ChatMessage> {
 
+    long countByConversationId(String conversationId);
+
+    void deleteByConversationId(String conversationId);
 }

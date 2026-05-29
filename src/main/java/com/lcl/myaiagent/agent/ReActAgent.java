@@ -56,7 +56,7 @@ public abstract class ReActAgent extends BaseAgent {
         try {
             boolean shouldAct = this.think();
             if (!shouldAct) {
-                // 如果不需要执行行动，则返回上一步的输出
+                // 如果不需要执行行动，则返回最后一条助手消息
                 return getMessageList().getLast().getText();
             }
             return this.act();

@@ -19,6 +19,7 @@ import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.tool.ToolCallback;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -102,12 +103,13 @@ public class ToolCallAgent extends ReActAgent {
      */
     @Override
     public boolean think() {
+        // 构建临时消息列表——NEXT_STEP_PROMPT 拼入请求但不持久化
+        List<Message> tempMessages = new ArrayList<>(getMessageList());
         if (getNextStepPrompt() != null && !getNextStepPrompt().isEmpty()) {
-            getMessageList().add(new UserMessage(getNextStepPrompt()));
+            tempMessages.add(new UserMessage(getNextStepPrompt()));
             setNextStepPrompt(null);
         }
-        List<Message> messageList = getMessageList();
-        Prompt prompt = new Prompt(messageList, chatOptions);
+        Prompt prompt = new Prompt(tempMessages, chatOptions);
         try {
             ChatResponse chatResponse = callLlm(prompt);
             // 记录响应，用于 Act

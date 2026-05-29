@@ -1,6 +1,6 @@
 package com.lcl.myaiagent.mapper;
 
-import com.lcl.myaiagent.domain.po.ChatMessage;
+import com.lcl.myaiagent.model.po.ChatMessage;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Mapper;
 

@@ -1,6 +1,6 @@
 package com.lcl.myaiagent.utils;
 
-import com.lcl.myaiagent.domain.po.ChatMessage;
+import com.lcl.myaiagent.model.po.ChatMessage;
 import org.springframework.ai.chat.messages.*;
 
 import java.util.ArrayList;

@@ -170,12 +170,10 @@ public abstract class BaseAgent {
                             handleStuckState();
                             if (this.state == AgentState.FINISHED) {
                                 emitter.send("检测到循环，智能体已终止");
+                                emitter.send("[DONE]");
                                 break;
                             }
                         }
-//                        String result = "Step " + this.currentStep + ": " + stepResult;
-//                        // 发送每一步的结果
-//                        emitter.send(result);
                         // 发送每一步的结果
                         emitter.send(stepResult);
                     }
@@ -185,12 +183,14 @@ public abstract class BaseAgent {
                         emitter.send("执行结束：达到最大步骤 (" + this.maxSteps + ")");
                     }
                     // 正常完成
+                    emitter.send("[DONE]");
                     emitter.complete();
                 } catch (Exception e) {
                     this.state = AgentState.ERROR;
                     log.error("Error executing agent: ", e);
                     try {
                         emitter.send("执行错误，Error: " + e.getMessage());
+                        emitter.send("[DONE]");
                         emitter.complete();
                     } catch (IOException ex) {
                         emitter.completeWithError(ex);

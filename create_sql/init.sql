@@ -2,7 +2,6 @@ drop database if exists `my-ai-agent`;
 create database `my-ai-agent`;
 
 drop table if exists `chat_message`;
-
 create table if not exists `chat_message`
 (
     id              bigint unsigned auto_increment comment '主键ID'
@@ -20,3 +19,37 @@ create table if not exists `chat_message`
 create index idx_conversation_id
     on chat_message (conversation_id);
 
+drop table if exists `conversation`;
+create table if not exists `conversation`
+(
+    id          varchar(64)                           not null comment '会话ID'
+        primary key,
+    user_id     varchar(64)                           not null comment '所属用户ID',
+    title       varchar(200) default '新对话'         not null comment '会话标题',
+    create_time datetime     default CURRENT_TIMESTAMP not null comment '创建时间',
+    update_time datetime     default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+    is_delete   tinyint(1)   default 0                 not null comment '是否删除',
+    constraint fk_conversation_user foreign key (user_id) references `user` (id)
+)
+    comment '会话表';
+
+-- 为 conversation 表添加 type 字段
+ALTER TABLE `conversation`
+    ADD COLUMN `type` VARCHAR(20) DEFAULT 'manus' NOT NULL COMMENT '会话类型: manus/love'
+        AFTER `user_id`;
+
+
+drop table if exists `user`;
+create table if not exists `user`
+(
+    id          varchar(64)                           not null comment '用户ID'
+        primary key,
+    username    varchar(50)                            not null comment '用户名',
+    password    varchar(64)                            not null comment '密码(MD5+salt)',
+    user_role   varchar(20)  default 'user'           not null comment '角色: user/admin',
+    create_time datetime     default CURRENT_TIMESTAMP not null comment '创建时间',
+    update_time datetime     default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP comment '更新时间',
+    is_delete   tinyint(1)   default 0                 not null comment '是否删除',
+    constraint uk_username unique (username)
+)
+    comment '用户表';
