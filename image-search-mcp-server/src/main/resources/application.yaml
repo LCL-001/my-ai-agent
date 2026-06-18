@@ -5,3 +5,6 @@ spring:
     active: sse
 server:
   port: 8127
+pexels:
+  api:
+    key: ${PEXELS_API_KEY:pexels-your-key-here}
