@@ -10,6 +10,7 @@ import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 
 /**
@@ -18,6 +19,7 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 @Slf4j
+@ConditionalOnProperty(name = "app.legacy-love.enabled", havingValue = "true")
 class LoveAppRagCloudAdvisorConfig {
 
     @Value("${spring.ai.dashscope.api-key}")

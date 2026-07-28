@@ -6,6 +6,7 @@ import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 /**
  * 向量存储配置类
@@ -13,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "app.legacy-love.enabled", havingValue = "true")
 public class LoveAppVectorStoreConfig {
 
     private final LoveAppDocumentReader loveAppDocumentReader;

@@ -25,6 +25,8 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 
@@ -168,7 +170,8 @@ public class LoveApp {
     }
 
 
-    @Resource
+    @Autowired(required = false)
+    @Qualifier("loveAppVectorStore")
     private VectorStore loveAppVectorStore;
 
     /**
@@ -200,7 +203,8 @@ public class LoveApp {
     }
 
 
-    @Resource
+    @Autowired(required = false)
+    @Qualifier("loveAppRagCloudAdvisor")
     private Advisor loveAppRagCloudAdvisor;
 
     /**
