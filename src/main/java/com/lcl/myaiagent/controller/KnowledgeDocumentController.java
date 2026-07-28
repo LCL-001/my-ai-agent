@@ -5,6 +5,7 @@ import com.lcl.myaiagent.common.ResultUtils;
 import com.lcl.myaiagent.model.enums.KnowledgeDocumentType;
 import com.lcl.myaiagent.model.po.User;
 import com.lcl.myaiagent.model.vo.KnowledgeDocumentVO;
+import com.lcl.myaiagent.model.vo.KnowledgeChunkVO;
 import com.lcl.myaiagent.model.vo.KnowledgeSearchResultVO;
 import com.lcl.myaiagent.service.KnowledgeDocumentService;
 import com.lcl.myaiagent.service.UserService;
@@ -41,6 +42,16 @@ public class KnowledgeDocumentController {
     @GetMapping
     public BaseResponse<List<KnowledgeDocumentVO>> list(HttpServletRequest request) {
         return ResultUtils.success(knowledgeDocumentService.list(userService.getLoginUser(request)));
+    }
+
+    @GetMapping("/{documentId}/chunks")
+    public BaseResponse<List<KnowledgeChunkVO>> listChunks(@PathVariable long documentId, HttpServletRequest request) {
+        return ResultUtils.success(knowledgeDocumentService.listChunks(documentId, userService.getLoginUser(request)));
+    }
+
+    @PostMapping("/{documentId}/reindex")
+    public BaseResponse<KnowledgeDocumentVO> reindex(@PathVariable long documentId, HttpServletRequest request) {
+        return ResultUtils.success(knowledgeDocumentService.reindex(documentId, userService.getLoginUser(request)));
     }
 
     @DeleteMapping("/{documentId}")

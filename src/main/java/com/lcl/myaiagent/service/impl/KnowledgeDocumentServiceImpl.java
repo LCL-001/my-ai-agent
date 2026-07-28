@@ -12,6 +12,7 @@ import com.lcl.myaiagent.model.po.KnowledgeChunk;
 import com.lcl.myaiagent.model.po.KnowledgeDocument;
 import com.lcl.myaiagent.model.po.User;
 import com.lcl.myaiagent.model.vo.KnowledgeDocumentVO;
+import com.lcl.myaiagent.model.vo.KnowledgeChunkVO;
 import com.lcl.myaiagent.model.vo.KnowledgeSearchResultVO;
 import com.lcl.myaiagent.service.KnowledgeDocumentService;
 import org.springframework.beans.factory.ObjectProvider;
@@ -116,6 +117,64 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
     }
 
     @Override
+    public List<KnowledgeChunkVO> listChunks(long documentId, User loginUser) {
+        KnowledgeDocument document = knowledgeDocumentMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KnowledgeDocument>()
+                        .eq(KnowledgeDocument::getId, documentId)
+                        .eq(KnowledgeDocument::getUserId, loginUser.getId()));
+        if (document == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "资料不存在或无权查看分片");
+        }
+        return knowledgeChunkMapper.selectList(
+                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KnowledgeChunk>()
+                                .eq(KnowledgeChunk::getDocumentId, documentId)
+                                .eq(KnowledgeChunk::getUserId, loginUser.getId())
+                                .orderByAsc(KnowledgeChunk::getChunkIndex))
+                .stream()
+                .map(this::toChunkVO)
+                .toList();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public KnowledgeDocumentVO reindex(long documentId, User loginUser) {
+        KnowledgeDocument document = knowledgeDocumentMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KnowledgeDocument>()
+                        .eq(KnowledgeDocument::getId, documentId)
+                        .eq(KnowledgeDocument::getUserId, loginUser.getId()));
+        if (document == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "资料不存在或无权重新切分");
+        }
+        List<String> textChunks = KnowledgeTextChunker.chunk(document.getContentText());
+        if (textChunks.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "资料中没有可检索的文本内容");
+        }
+        VectorStore vectorStore = userKnowledgeVectorStoreProvider.getIfAvailable();
+        if (vectorStore == null) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "向量资料库未启用，请先启动 PgVector 服务");
+        }
+
+        List<KnowledgeChunk> previousChunks = knowledgeChunkMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KnowledgeChunk>()
+                        .eq(KnowledgeChunk::getDocumentId, documentId)
+                        .eq(KnowledgeChunk::getUserId, loginUser.getId()));
+        List<KnowledgeChunk> refreshedChunks = createChunks(document, textChunks);
+        vectorStore.add(refreshedChunks.stream().map(chunk -> toVectorDocument(chunk, document)).toList());
+        knowledgeChunkMapper.delete(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<KnowledgeChunk>()
+                .eq(KnowledgeChunk::getDocumentId, documentId)
+                .eq(KnowledgeChunk::getUserId, loginUser.getId()));
+        refreshedChunks.forEach(knowledgeChunkMapper::insert);
+        if (!previousChunks.isEmpty()) {
+            vectorStore.delete(previousChunks.stream().map(KnowledgeChunk::getVectorDocumentId).toList());
+        }
+        document.setStatus(KnowledgeDocumentStatus.READY.name());
+        document.setErrorMessage(null);
+        document.setChunkCount(refreshedChunks.size());
+        knowledgeDocumentMapper.updateById(document);
+        return toDocumentVO(document);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void delete(long documentId, User loginUser) {
         KnowledgeDocument document = knowledgeDocumentMapper.selectOne(
@@ -210,6 +269,15 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
         valueObject.setErrorMessage(document.getErrorMessage());
         valueObject.setChunkCount(document.getChunkCount());
         valueObject.setCreateTime(document.getCreateTime());
+        return valueObject;
+    }
+
+    private KnowledgeChunkVO toChunkVO(KnowledgeChunk chunk) {
+        KnowledgeChunkVO valueObject = new KnowledgeChunkVO();
+        valueObject.setId(chunk.getId());
+        valueObject.setChunkIndex(chunk.getChunkIndex());
+        valueObject.setContent(chunk.getContent());
+        valueObject.setCreateTime(chunk.getCreateTime());
         return valueObject;
     }
 

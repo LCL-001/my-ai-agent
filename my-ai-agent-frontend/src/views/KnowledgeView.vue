@@ -1,8 +1,15 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import AppLayout from '@/components/AppLayout.vue'
-import { deleteKnowledgeDocument, listKnowledgeDocuments, searchKnowledge, uploadKnowledgeDocument } from '@/api/knowledge'
-import { BookOpen, FileSearch, FileUp, Search, Trash2, X } from 'lucide-vue-next'
+import {
+  deleteKnowledgeDocument,
+  listKnowledgeChunks,
+  listKnowledgeDocuments,
+  reindexKnowledgeDocument,
+  searchKnowledge,
+  uploadKnowledgeDocument,
+} from '@/api/knowledge'
+import { BookOpen, ChevronDown, ChevronUp, FileSearch, FileUp, ListTree, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
 
 const documents = ref([])
 const selectedFile = ref(null)
@@ -12,6 +19,10 @@ const searchQuery = ref('')
 const searchResults = ref([])
 const searching = ref(false)
 const errorMessage = ref('')
+const expandedDocumentId = ref(null)
+const documentChunks = ref([])
+const loadingChunks = ref(false)
+const reindexingDocumentId = ref(null)
 
 const typeOptions = [
   { value: 'RESUME', label: '简历' },
@@ -21,6 +32,7 @@ const typeOptions = [
 ]
 
 const readyDocuments = computed(() => documents.value.filter((document) => document.status === 'READY').length)
+const expandedDocument = computed(() => documents.value.find((document) => document.id === expandedDocumentId.value))
 
 async function loadDocuments() {
   const response = await listKnowledgeDocuments()
@@ -53,7 +65,47 @@ async function uploadDocument() {
 
 async function removeDocument(documentId) {
   await deleteKnowledgeDocument(documentId)
+  if (expandedDocumentId.value === documentId) {
+    expandedDocumentId.value = null
+    documentChunks.value = []
+  }
   await loadDocuments()
+}
+
+async function toggleChunks(documentItem) {
+  if (expandedDocumentId.value === documentItem.id) {
+    expandedDocumentId.value = null
+    documentChunks.value = []
+    return
+  }
+  loadingChunks.value = true
+  errorMessage.value = ''
+  try {
+    const response = await listKnowledgeChunks(documentItem.id)
+    expandedDocumentId.value = documentItem.id
+    documentChunks.value = response.data.data || []
+  } catch (error) {
+    errorMessage.value = error.message || '加载分片失败，请稍后重试。'
+  } finally {
+    loadingChunks.value = false
+  }
+}
+
+async function reindexDocument(documentItem) {
+  reindexingDocumentId.value = documentItem.id
+  errorMessage.value = ''
+  try {
+    await reindexKnowledgeDocument(documentItem.id)
+    await loadDocuments()
+    if (expandedDocumentId.value === documentItem.id) {
+      const response = await listKnowledgeChunks(documentItem.id)
+      documentChunks.value = response.data.data || []
+    }
+  } catch (error) {
+    errorMessage.value = error.message || '重新切分失败，请稍后重试。'
+  } finally {
+    reindexingDocumentId.value = null
+  }
 }
 
 async function runSearch() {
@@ -79,7 +131,7 @@ onMounted(loadDocuments)
       <header class="workspace-header">
         <div>
           <p class="eyebrow">PRIVATE STUDY ARCHIVE</p>
-          <h1>把资料变成可追溯的准备依据</h1>
+          <h1>把资料变成可追溯的<br />准备依据</h1>
           <p>上传简历、JD 与笔记；后续分析和模拟面试只引用属于你的资料。</p>
         </div>
         <div class="archive-count"><strong>{{ readyDocuments }}</strong><span>份已就绪资料</span></div>
@@ -95,7 +147,7 @@ onMounted(loadDocuments)
           </label>
           <input id="knowledge-file" type="file" accept=".pdf,.docx,.md,.markdown,.txt" @change="chooseFile" />
           <div class="type-picker">
-            <button v-for="option in typeOptions" :key="option.value" :class="{ active: selectedType === option.value }" @click="selectedType = option.value">
+            <button v-for="option in typeOptions" :key="option.value" type="button" :class="{ active: selectedType === option.value }" @click="selectedType = option.value">
               {{ option.label }}
             </button>
           </div>
@@ -108,7 +160,7 @@ onMounted(loadDocuments)
           <p class="panel-copy">先验证资料能否命中，再用它生成能力分析。</p>
           <div class="search-box">
             <input v-model="searchQuery" placeholder="例如：我简历中有哪些 Redis 实践？" @keyup.enter="runSearch" />
-            <button :disabled="searching" @click="runSearch"><Search :size="18" /></button>
+            <button type="button" :disabled="searching" @click="runSearch"><Search :size="18" /></button>
           </div>
           <div v-if="searchResults.length" class="result-list">
             <article v-for="result in searchResults" :key="`${result.documentId}-${result.chunkIndex}`" class="result-card">
@@ -122,13 +174,38 @@ onMounted(loadDocuments)
 
       <section class="panel document-panel">
         <div class="panel-heading"><BookOpen :size="19" /><h2>我的资料</h2></div>
-        <div v-if="documents.length" class="document-table">
-          <article v-for="documentItem in documents" :key="documentItem.id" class="document-row">
-            <div class="document-name"><strong>{{ documentItem.name }}</strong><span>{{ documentItem.documentType }}</span></div>
-            <div class="document-status" :class="documentItem.status.toLowerCase()">{{ documentItem.status === 'READY' ? `${documentItem.chunkCount} 个检索片段` : documentItem.status }}</div>
-            <button class="icon-button" title="删除资料" @click="removeDocument(documentItem.id)"><Trash2 :size="17" /></button>
-          </article>
-        </div>
+        <template v-if="documents.length">
+          <div class="document-table">
+            <article v-for="documentItem in documents" :key="documentItem.id" class="document-row">
+              <div class="document-name"><strong>{{ documentItem.name }}</strong><span>{{ documentItem.documentType }}</span></div>
+              <div class="document-status" :class="documentItem.status.toLowerCase()">{{ documentItem.status === 'READY' ? `${documentItem.chunkCount} 个检索片段` : documentItem.status }}</div>
+              <button class="chunk-button" type="button" :disabled="documentItem.status !== 'READY' || loadingChunks" @click="toggleChunks(documentItem)">
+                <ListTree :size="15" />
+                <span>{{ expandedDocumentId === documentItem.id ? '收起分片' : '查看分片' }}</span>
+                <ChevronUp v-if="expandedDocumentId === documentItem.id" :size="14" />
+                <ChevronDown v-else :size="14" />
+              </button>
+              <button class="reindex-button" type="button" :disabled="documentItem.status !== 'READY' || reindexingDocumentId === documentItem.id" @click="reindexDocument(documentItem)">
+                <RefreshCw :size="14" :class="{ spinning: reindexingDocumentId === documentItem.id }" />
+                <span>{{ reindexingDocumentId === documentItem.id ? '切分中' : '重新切分' }}</span>
+              </button>
+              <button class="icon-button" type="button" title="删除资料" @click="removeDocument(documentItem.id)"><Trash2 :size="17" /></button>
+            </article>
+          </div>
+          <section v-if="expandedDocumentId" class="chunk-preview" aria-live="polite">
+            <div class="chunk-preview-heading">
+              <div><p>CHUNK INDEX</p><h3>{{ expandedDocument?.name || '资料' }} · 已切分 {{ documentChunks.length }} 段</h3></div>
+              <span>{{ loadingChunks ? '正在读取…' : '按原始顺序展示' }}</span>
+            </div>
+            <div v-if="documentChunks.length" class="chunk-list">
+              <article v-for="chunk in documentChunks" :key="chunk.id" class="chunk-card">
+                <span class="chunk-number">{{ String(chunk.chunkIndex + 1).padStart(2, '0') }}</span>
+                <p>{{ chunk.content }}</p>
+              </article>
+            </div>
+            <div v-else class="empty-chunks">这份资料暂时没有可展示的分片。</div>
+          </section>
+        </template>
         <div v-else class="empty-documents">第一份资料通常从简历开始。上传后即可验证检索结果。</div>
       </section>
     </section>
@@ -151,6 +228,9 @@ h1 { margin: 7px 0 8px; font-size: clamp(29px, 4vw, 46px); letter-spacing: -.045
 .type-picker { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 16px; }.type-picker button { border: 1px solid #dbe3ee; color: #64748b; border-radius: 999px; padding: 6px 10px; font-size: 12px; }.type-picker button.active { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
 .primary-action { width: 100%; background: #0f172a; color: #fff; padding: 11px; border-radius: 7px; font-weight: 650; }.primary-action:disabled { opacity: .65; cursor: progress; }.error-text { margin-top: 10px; color: var(--danger); font-size: 12px; }
 .panel-copy { margin: 16px 0 12px; }.search-box { display: flex; background: #f1f5f9; border: 1px solid #dbe3ee; padding: 4px; }.search-box input { min-width: 0; flex: 1; padding: 9px 10px; }.search-box button { width: 37px; background: #1d4ed8; color: #fff; display: grid; place-items: center; }.result-list { margin-top: 13px; max-height: 250px; overflow-y: auto; display: grid; gap: 8px; }.result-card { border-left: 3px solid #60a5fa; background: #f8fafc; padding: 10px 12px; }.result-card div { display: flex; justify-content: space-between; gap: 8px; }.result-card span { color: #1d4ed8; font-size: 10px; font-weight: 700; }.result-card small { color: var(--text-muted); font-size: 10px; }.result-card p { margin-top: 6px; font-size: 12px; color: #475569; white-space: pre-wrap; }.empty-search,.empty-documents { color: var(--text-muted); font-size: 13px; padding: 34px 0; text-align: center; }
-.document-panel { max-width: 1180px; margin: 0 auto; }.document-table { margin-top: 15px; display: grid; }.document-row { display: grid; grid-template-columns: 1fr auto 34px; align-items: center; gap: 15px; padding: 13px 0; border-top: 1px solid #e2e8f0; }.document-name { display: grid; gap: 2px; }.document-name strong { font-size: 14px; }.document-name span { color: #64748b; font-size: 11px; font-family: ui-monospace, monospace; }.document-status { color: #64748b; font-size: 12px; }.document-status.ready { color: #059669; }.document-status.failed { color: #dc2626; }.icon-button { color: #94a3b8; padding: 7px; }.icon-button:hover { color: #dc2626; background: #fff1f2; }
-@media (max-width: 800px) { .workspace-header { display: grid; }.workspace-grid { grid-template-columns: 1fr; }.knowledge-workspace { padding: 28px 18px; }.archive-count { width: max-content; } }
+.document-panel { max-width: 1180px; margin: 0 auto; }.document-table { margin-top: 15px; display: grid; }.document-row { display: grid; grid-template-columns: 1fr auto auto auto 34px; align-items: center; gap: 10px; padding: 13px 0; border-top: 1px solid #e2e8f0; }.document-name { display: grid; gap: 2px; }.document-name strong { font-size: 14px; }.document-name span { color: #64748b; font-size: 11px; font-family: ui-monospace, monospace; }.document-status { color: #64748b; font-size: 12px; }.document-status.ready { color: #059669; }.document-status.failed { color: #dc2626; }
+.chunk-button,.reindex-button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #bfdbfe; color: #1d4ed8; background: #eff6ff; border-radius: 999px; padding: 6px 9px; font-size: 12px; }.reindex-button { border-color: #c7d2fe; color: #4338ca; background: #eef2ff; }.chunk-button:disabled,.reindex-button:disabled { opacity: .45; cursor: not-allowed; }.spinning { animation: spin .8s linear infinite; }.icon-button { color: #94a3b8; padding: 7px; }.icon-button:hover { color: #dc2626; background: #fff1f2; }
+.chunk-preview { margin-top: 18px; border-top: 1px solid #dbeafe; padding-top: 18px; }.chunk-preview-heading { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 12px; }.chunk-preview-heading p { color: #2563eb; font: 700 10px ui-monospace, monospace; letter-spacing: .12em; }.chunk-preview-heading h3 { margin-top: 3px; font-size: 16px; }.chunk-preview-heading > span { color: #64748b; font-size: 12px; }.chunk-list { display: grid; gap: 9px; max-height: 430px; overflow-y: auto; padding-right: 4px; }.chunk-card { display: grid; grid-template-columns: 34px 1fr; gap: 12px; border: 1px solid #dbeafe; background: linear-gradient(110deg, #eff6ff, #fff); padding: 13px; }.chunk-number { color: #2563eb; font: 700 12px ui-monospace, monospace; }.chunk-card p { white-space: pre-wrap; line-height: 1.7; color: #334155; font-size: 13px; }.empty-chunks { color: var(--text-muted); font-size: 13px; padding: 20px 0; text-align: center; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 800px) { .workspace-header { display: grid; }.workspace-grid { grid-template-columns: 1fr; }.knowledge-workspace { padding: 28px 18px; }.archive-count { width: max-content; }.document-row { grid-template-columns: 1fr auto 34px; }.document-status { grid-column: 1 / 2; }.chunk-button { grid-column: 2 / 3; grid-row: 1 / 2; }.reindex-button { grid-column: 2 / 3; grid-row: 2 / 3; }.icon-button { grid-column: 3 / 4; grid-row: 1 / 3; } }
 </style>
