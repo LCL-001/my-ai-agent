@@ -158,7 +158,7 @@ public class KnowledgeDocumentServiceImpl implements KnowledgeDocumentService {
         return vectorStore.similaritySearch(SearchRequest.builder()
                         .query(query.trim())
                         .topK(topK)
-                        .similarityThreshold(0.5)
+                        .similarityThreshold(0.3)
                         .filterExpression(filterExpression)
                         .build())
                 .stream()
