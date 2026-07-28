@@ -113,7 +113,14 @@ public class ConversationController {
      * 获取会话的所有消息
      */
     @GetMapping("/{conversationId}/messages")
-    public BaseResponse<List<ChatMessageVO>> getMessages(@PathVariable String conversationId) {
+    public BaseResponse<List<ChatMessageVO>> getMessages(@PathVariable String conversationId, HttpServletRequest request) {
+        User loginUser = getLoginUser(request);
+        if (loginUser == null) {
+            return ResultUtils.error(ErrorCode.NOT_LOGIN_ERROR);
+        }
+        if (!conversationService.belongsToUser(conversationId, loginUser.getId())) {
+            return ResultUtils.error(ErrorCode.NOT_FOUND_ERROR, "会话不存在或无权访问");
+        }
         List<ChatMessage> messages = chatMessageService.lambdaQuery()
                 .eq(ChatMessage::getConversationId, conversationId)
                 .orderByAsc(ChatMessage::getCreateTime)

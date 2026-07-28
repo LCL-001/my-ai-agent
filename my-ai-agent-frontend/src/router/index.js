@@ -4,6 +4,7 @@ import HomeView from '@/views/HomeView.vue'
 const KnowledgeView = () => import('@/views/KnowledgeView.vue')
 const AnalysisView = () => import('@/views/AnalysisView.vue')
 const StudyPlanView = () => import('@/views/StudyPlanView.vue')
+const InterviewView = () => import('@/views/InterviewView.vue')
 const ChatView = () => import('@/views/ChatView.vue')
 const LoginView = () => import('@/views/LoginView.vue')
 const LoveAppView = () => import('@/views/LoveAppView.vue')
@@ -16,6 +17,7 @@ const router = createRouter({
     { path: '/prepare', name: 'knowledge', component: KnowledgeView },
     { path: '/analysis', name: 'analysis', component: AnalysisView },
     { path: '/plans', name: 'plans', component: StudyPlanView },
+    { path: '/interviews', name: 'interviews', component: InterviewView },
     { path: '/chat', name: 'chat', component: ChatView },
     { path: '/chat/:id', name: 'chat-detail', component: ChatView },
     { path: '/login', name: 'login', component: LoginView },

@@ -87,4 +87,9 @@ public class ConversationService {
         chatMessageService.deleteByConversationId(conversationId);
         return true;
     }
+
+    public boolean belongsToUser(String conversationId, String userId) {
+        Conversation conversation = conversationMapper.selectById(conversationId);
+        return conversation != null && conversation.getUserId().equals(userId);
+    }
 }
