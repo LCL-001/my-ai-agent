@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import HomeView from '@/views/HomeView.vue'
 const KnowledgeView = () => import('@/views/KnowledgeView.vue')
+const AnalysisView = () => import('@/views/AnalysisView.vue')
 const ChatView = () => import('@/views/ChatView.vue')
 const LoginView = () => import('@/views/LoginView.vue')
 const LoveAppView = () => import('@/views/LoveAppView.vue')
@@ -12,6 +13,7 @@ const router = createRouter({
   routes: [
     { path: '/', name: 'home', component: HomeView },
     { path: '/prepare', name: 'knowledge', component: KnowledgeView },
+    { path: '/analysis', name: 'analysis', component: AnalysisView },
     { path: '/chat', name: 'chat', component: ChatView },
     { path: '/chat/:id', name: 'chat-detail', component: ChatView },
     { path: '/login', name: 'login', component: LoginView },
