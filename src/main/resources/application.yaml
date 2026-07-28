@@ -28,9 +28,9 @@
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/yu-ai-agent
-    username: root
-    password: 123456
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/yu-ai-agent}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:123456}
 #    url: jdbc:postgresql://rm-cn-cq74sgsb50001ywo.rwlb.rds.aliyuncs.com/yu_ai_agent
 #    username: your username
 #    password: your password
@@ -38,6 +38,20 @@
     multipart:
       max-file-size: 10MB
       max-request-size: 20MB
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
+
+app:
+  vector:
+    enabled: ${VECTOR_ENABLED:false}
+    datasource:
+      jdbc-url: ${VECTOR_DB_URL:jdbc:postgresql://localhost:5432/yu_ai_agent_vector}
+      username: ${VECTOR_DB_USERNAME:postgres}
+      password: ${VECTOR_DB_PASSWORD:postgres}
+      driver-class-name: org.postgresql.Driver
 
 # springdoc-openapi????
 springdoc:
@@ -98,5 +112,5 @@ mybatis-plus:
     enable-sql-runner: true
 logging:
   level:
-    org.springframework.ai: DEBUG
+    org.springframework.ai: INFO
 #kind: Application

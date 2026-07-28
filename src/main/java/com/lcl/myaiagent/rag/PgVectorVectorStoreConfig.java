@@ -5,6 +5,8 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.springframework.ai.vectorstore.pgvector.PgVectorStore.PgDistanceType.COSINE_DISTANCE;
@@ -14,7 +16,8 @@ import static org.springframework.ai.vectorstore.pgvector.PgVectorStore.PgIndexT
  * PgVector向量存储配置类
  * 配置基于PostgreSQL的向量数据库，用于存储和检索文档向量
  */
-//@Configuration
+@Configuration
+@ConditionalOnProperty(value = "app.vector.enabled", havingValue = "true")
 public class PgVectorVectorStoreConfig {
 
     /**
@@ -26,7 +29,9 @@ public class PgVectorVectorStoreConfig {
      * @return VectorStore 配置完成的PgVector向量存储实例
      */
     @Bean
-    public VectorStore pgVectorVectorStore(JdbcTemplate jdbcTemplate, EmbeddingModel dashscopeEmbeddingModel) {
+    public VectorStore userKnowledgeVectorStore(
+            @Qualifier("vectorJdbcTemplate") JdbcTemplate jdbcTemplate,
+            EmbeddingModel dashscopeEmbeddingModel) {
         VectorStore vectorStore = PgVectorStore.builder(jdbcTemplate, dashscopeEmbeddingModel)
                 .dimensions(1024)                    // 不要盲目设置
                 .distanceType(COSINE_DISTANCE)       // Optional: defaults to COSINE_DISTANCE
