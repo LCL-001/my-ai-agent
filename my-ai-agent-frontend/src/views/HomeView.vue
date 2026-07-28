@@ -3,7 +3,7 @@ import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
-onMounted(() => router.replace('/chat'))
+onMounted(() => router.replace('/prepare'))
 </script>
 
 <template><div /></template>

@@ -45,6 +45,8 @@
     baseline-version: 1
 
 app:
+  knowledge:
+    storage-dir: ${KNOWLEDGE_STORAGE_DIR:./data/knowledge}
   vector:
     enabled: ${VECTOR_ENABLED:false}
     datasource:
