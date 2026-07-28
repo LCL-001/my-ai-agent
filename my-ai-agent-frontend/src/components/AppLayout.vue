@@ -19,7 +19,10 @@ import Sidebar from './Sidebar.vue'
 .main-content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 </style>
