@@ -8,6 +8,7 @@ import com.lcl.myaiagent.chatmemory.DataBaseChatMemory;
 import com.lcl.myaiagent.constant.UserConstant;
 import com.lcl.myaiagent.model.po.User;
 import com.lcl.myaiagent.service.ConversationService;
+import com.lcl.myaiagent.service.ConversationTitleService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -44,6 +45,9 @@ public class AiController {
 
     @Resource
     private ConversationService conversationService;
+
+    @Resource
+    private ConversationTitleService conversationTitleService;
 
     /**
      * 获取登录用户（可能为 null）
@@ -83,6 +87,7 @@ public class AiController {
                 dataBaseChatMemory.add(chatId, messages);
                 // 自动创建/更新会话，绑定登录用户
                 conversationService.getOrCreate(chatId, userId, "manus");
+                conversationTitleService.generateForFirstMessage(chatId, userId, message);
                 log.info("Saved {} messages to DB for chatId: {}", messages.size(), chatId);
             });
         }

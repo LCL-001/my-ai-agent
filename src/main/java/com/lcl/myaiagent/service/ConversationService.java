@@ -15,6 +15,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ConversationService {
 
+    public static final String DEFAULT_TITLE = "新对话";
+
     private final ConversationMapper conversationMapper;
     private final ChatMessageService chatMessageService;
 
@@ -28,7 +30,7 @@ public class ConversationService {
             conversation.setId(conversationId);
             conversation.setUserId(userId);
             conversation.setType(type != null ? type : "manus");
-            conversation.setTitle("新对话");
+            conversation.setTitle(DEFAULT_TITLE);
             conversationMapper.insert(conversation);
         }
         return conversation;
@@ -91,5 +93,14 @@ public class ConversationService {
     public boolean belongsToUser(String conversationId, String userId) {
         Conversation conversation = conversationMapper.selectById(conversationId);
         return conversation != null && conversation.getUserId().equals(userId);
+    }
+
+    public boolean updateGeneratedTitleIfDefault(String conversationId, String userId, String title) {
+        Conversation update = new Conversation();
+        update.setTitle(title);
+        return conversationMapper.update(update, new LambdaQueryWrapper<Conversation>()
+                .eq(Conversation::getId, conversationId)
+                .eq(Conversation::getUserId, userId)
+                .eq(Conversation::getTitle, DEFAULT_TITLE)) == 1;
     }
 }
