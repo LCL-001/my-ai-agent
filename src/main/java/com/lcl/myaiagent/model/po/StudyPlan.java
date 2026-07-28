@@ -13,11 +13,19 @@ import java.util.Date;
 public class StudyPlan {
     @TableId
     private String id;
+
+    @TableField("user_id")
     private String userId;
+
+    @TableField("gap_analysis_id")
     private String gapAnalysisId;
     private String title;
     private String status;
+
+    @TableField("confirm_token")
     private String confirmToken;
+
+    @TableField("draft_note")
     private String draftNote;
     @TableField(value = "create_time", fill = FieldFill.INSERT)
     private Date createTime;

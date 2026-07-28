@@ -14,6 +14,8 @@ public class GapAnalysis {
 
     @TableId
     private String id;
+
+    @TableField("user_id")
     private String userId;
     private String status;
     private String content;

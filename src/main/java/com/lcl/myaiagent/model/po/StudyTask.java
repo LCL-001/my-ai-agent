@@ -14,12 +14,22 @@ import java.util.Date;
 public class StudyTask {
     @TableId
     private String id;
+
+    @TableField("plan_id")
     private String planId;
+
+    @TableField("user_id")
     private String userId;
+
+    @TableField("day_number")
     private Integer dayNumber;
     private String title;
     private String description;
+
+    @TableField("task_status")
     private String taskStatus;
+
+    @TableField("scheduled_date")
     private LocalDate scheduledDate;
     @TableField(value = "create_time", fill = FieldFill.INSERT)
     private Date createTime;
