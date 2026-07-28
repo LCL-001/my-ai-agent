@@ -6,7 +6,7 @@ import { useConversationStore } from '@/stores/conversation'
 import { useLoginPrompt } from '@/composables/useLoginPrompt'
 import {
   Plus, MessageSquare, Search, Trash2, Edit3, Check, X,
-  User, LogIn, LogOut, Sparkles, Bot, ChevronDown, BookOpen, ChartNoAxesColumnIncreasing
+  User, LogIn, LogOut, Sparkles, Bot, ChevronDown, BookOpen, ChartNoAxesColumnIncreasing, CalendarDays
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -89,6 +89,9 @@ async function handleLogin() {
     </button>
     <button class="knowledge-link" :class="{ active: route.path === '/analysis' }" @click="router.push('/analysis')">
       <ChartNoAxesColumnIncreasing :size="17" /> 差距分析
+    </button>
+    <button class="knowledge-link" :class="{ active: route.path === '/plans' }" @click="router.push('/plans')">
+      <CalendarDays :size="17" /> 学习计划
     </button>
     <div class="new-chat-wrap">
       <button class="new-chat-btn" @click="newChat()">
