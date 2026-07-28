@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import {
   deleteKnowledgeDocument,
@@ -23,6 +24,7 @@ const expandedDocumentId = ref(null)
 const documentChunks = ref([])
 const loadingChunks = ref(false)
 const reindexingDocumentId = ref(null)
+const route = useRoute()
 
 const typeOptions = [
   { value: 'RESUME', label: '简历' },
@@ -122,7 +124,14 @@ async function runSearch() {
   }
 }
 
-onMounted(loadDocuments)
+onMounted(async () => {
+  await loadDocuments()
+  const documentId = Number(route.query.documentId)
+  const documentItem = documents.value.find((item) => item.id === documentId)
+  if (documentItem?.status === 'READY') {
+    await toggleChunks(documentItem)
+  }
+})
 </script>
 
 <template>

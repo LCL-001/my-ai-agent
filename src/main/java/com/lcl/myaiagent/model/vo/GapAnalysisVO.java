@@ -18,8 +18,10 @@ public class GapAnalysisVO {
     @Data
     public static class GapItem {
         private String skill;
+        private String verdict;
         private String severity;
         private String recommendation;
+        private boolean evidenceAvailable;
         private List<Evidence> evidence;
     }
 
