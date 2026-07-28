@@ -33,6 +33,9 @@ class InterviewPreparationEntityMappingTest {
         assertColumn(InterviewSession.class, "questionLimit", "question_limit");
         assertColumn(InterviewTurn.class, "sessionId", "session_id");
         assertColumn(InterviewTurn.class, "turnNumber", "turn_number");
+        assertColumn(InterviewTurn.class, "questionContext", "question_context");
+        assertColumn(InterviewTurn.class, "feedbackDetail", "feedback_detail");
+        assertColumn(InterviewTurn.class, "evidenceDetail", "evidence_detail");
         assertColumn(InterviewTurn.class, "turnStatus", "turn_status");
     }
 
