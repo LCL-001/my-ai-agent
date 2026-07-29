@@ -50,8 +50,6 @@
 app:
   legacy-love:
     enabled: ${LEGACY_LOVE_ENABLED:false}
-  knowledge:
-    storage-dir: ${KNOWLEDGE_STORAGE_DIR:./data/knowledge}
   vector:
     enabled: ${VECTOR_ENABLED:false}
     datasource:
@@ -59,6 +57,9 @@ app:
       username: ${VECTOR_DB_USERNAME:postgres}
       password: ${VECTOR_DB_PASSWORD:postgres}
       driver-class-name: org.postgresql.Driver
+
+search-api:
+  api-key: ${SEARCH_API_KEY:}
 
 # springdoc-openapi????
 springdoc:

@@ -1,20 +1,37 @@
 package com.lcl.myaiagent.config;
 
+import com.lcl.myaiagent.tools.AskHumanTool;
+import com.lcl.myaiagent.tools.FileOperationTool;
+import com.lcl.myaiagent.tools.PDFGenerationTool;
+import com.lcl.myaiagent.tools.ResourceDownloadTool;
+import com.lcl.myaiagent.tools.TerminateTool;
+import com.lcl.myaiagent.tools.WebScrapingTool;
+import com.lcl.myaiagent.tools.WebSearchTool;
+import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.ai.tool.ToolCallback;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 面试准备智能体的工具注册配置。
- *
- * <p>默认不向模型开放本地文件、网页抓取、下载或终端能力。后续功能只会注册
- * 已通过当前登录用户完成归属校验的资料检索和计划草稿工具。</p>
+ * Registers the original MyManus tool callbacks.
  */
 @Configuration
 public class ToolRegistration {
 
+    @Value("${search-api.api-key:}")
+    private String searchApiKey;
+
     @Bean
     public ToolCallback[] allTools() {
-        return new ToolCallback[0];
+        return ToolCallbacks.from(
+                new FileOperationTool(),
+                new WebSearchTool(searchApiKey),
+                new WebScrapingTool(),
+                new ResourceDownloadTool(),
+                new PDFGenerationTool(),
+                new AskHumanTool(),
+                new TerminateTool()
+        );
     }
 }

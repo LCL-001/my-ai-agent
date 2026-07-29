@@ -6,7 +6,7 @@ import { useConversationStore } from '@/stores/conversation'
 import { useLoginPrompt } from '@/composables/useLoginPrompt'
 import {
   Plus, MessageSquare, Search, Trash2, Edit3, Check, X,
-  User, LogIn, LogOut, Sparkles, Bot, ChevronDown, BookOpen, ChartNoAxesColumnIncreasing, CalendarDays, MicVocal
+  User, LogIn, LogOut, Sparkles, Bot, ChevronDown
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -84,18 +84,6 @@ async function handleLogin() {
     </div>
 
     <!-- 新建对话 -->
-    <button class="knowledge-link" :class="{ active: route.path === '/prepare' }" @click="router.push('/prepare')">
-      <BookOpen :size="17" /> 资料库
-    </button>
-    <button class="knowledge-link" :class="{ active: route.path === '/analysis' }" @click="router.push('/analysis')">
-      <ChartNoAxesColumnIncreasing :size="17" /> 差距分析
-    </button>
-    <button class="knowledge-link" :class="{ active: route.path === '/plans' }" @click="router.push('/plans')">
-      <CalendarDays :size="17" /> 学习计划
-    </button>
-    <button class="knowledge-link" :class="{ active: route.path === '/interviews' }" @click="router.push('/interviews')">
-      <MicVocal :size="17" /> 模拟面试
-    </button>
     <div class="new-chat-wrap">
       <button class="new-chat-btn" @click="newChat()">
         <Plus :size="18" />
@@ -198,8 +186,6 @@ async function handleLogin() {
   user-select: none;
 }
 .new-chat-wrap { position: relative; margin: 8px 16px; display: flex; }
-.knowledge-link { display: flex; align-items: center; gap: 9px; margin: 10px 16px 0; padding: 9px 12px; color: var(--text-secondary); font-size: 13px; font-weight: 600; border-radius: var(--radius-sm); text-align: left; }
-.knowledge-link:hover,.knowledge-link.active { color: var(--accent); background: var(--accent-soft); }
 .new-chat-btn {
   flex: 1;
   display: flex;
