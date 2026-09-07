@@ -1,10 +1,10 @@
 package com.lcl.myaiagent.controller;
 
-import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.lcl.myaiagent.agent.MyManus;
 import com.lcl.myaiagent.app.LoveApp;
 import com.lcl.myaiagent.chatmemory.DataBaseChatMemory;
+import com.lcl.myaiagent.chatmemory.FlowWindowBasedChatMemory;
 import com.lcl.myaiagent.constant.UserConstant;
 import com.lcl.myaiagent.model.po.User;
 import com.lcl.myaiagent.service.ConversationService;
@@ -25,6 +25,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @RestController
@@ -42,6 +43,9 @@ public class AiController {
 
     @Resource
     private DataBaseChatMemory dataBaseChatMemory;
+
+    @Resource
+    private FlowWindowBasedChatMemory flowWindowBasedChatMemory;
 
     @Resource
     private ConversationService conversationService;
@@ -64,33 +68,25 @@ public class AiController {
      */
     @GetMapping("/manus/chat")
     public SseEmitter doChatWithManus(String message, String chatId, HttpServletRequest request) {
-        MyManus manus = new MyManus(allTools, dashscopeChatModel);
+        // 前端未传 chatId 时生成一个，避免所有匿名请求共用 advisor 的默认会话，
+        // 造成不同用户的记忆串到同一个会话里
+        final String convId = StrUtil.isBlank(chatId) ? UUID.randomUUID().toString() : chatId;
+        // 记忆由 Agent 内部的 Memory Advisor 读取（带 conversationId），
+        // 控制器不再手动加载历史，避免与 advisor 注入的记忆重复
+        MyManus manus = new MyManus(allTools, dashscopeChatModel, convId, flowWindowBasedChatMemory);
 
         String userId = getLoginUserId(request);
 
-        // 加载历史消息
-        if (StrUtil.isNotBlank(chatId)) {
-            List<Message> history = dataBaseChatMemory.get(chatId);
-            if (CollUtil.isNotEmpty(history)) {
-                manus.getMessageList().addAll(history);
-                log.info("Loaded {} history messages for chatId: {}", history.size(), chatId);
-            }
-        }
-
         SseEmitter emitter = manus.runStream(message);
 
-        // 对话结束后持久化
-        if (StrUtil.isNotBlank(chatId)) {
-            emitter.onCompletion(() -> {
-                List<Message> messages = manus.getMessageList();
-                dataBaseChatMemory.clear(chatId);
-                dataBaseChatMemory.add(chatId, messages);
-                // 自动创建/更新会话，绑定登录用户
-                conversationService.getOrCreate(chatId, userId, "manus");
-                conversationTitleService.generateForFirstMessage(chatId, userId, message);
-                log.info("Saved {} messages to DB for chatId: {}", messages.size(), chatId);
-            });
-        }
+        // 消息落库由 Memory Advisor 在每步 LLM 调用后自动完成（读写双向），
+        // 控制器不再追加，否则与 advisor 的写入重复。
+        // 这里只做会话登记等业务簿记
+        emitter.onCompletion(() -> {
+            conversationService.getOrCreate(convId, userId, "manus");
+            conversationTitleService.generateForFirstMessage(convId, userId, message);
+            log.info("Conversation bookkeeping done for chatId: {}", convId);
+        });
 
         return emitter;
     }

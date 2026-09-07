@@ -3,12 +3,15 @@ package com.lcl.myaiagent.agent;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lcl.myaiagent.agent.model.AgentState;
 import com.lcl.myaiagent.tools.AskHumanTool;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -72,20 +75,34 @@ public class ToolCallAgent extends ReActAgent {
      * 调用 LLM，子类可覆盖以适配测试或不同 LLM 实现
      */
     protected ChatResponse callLlm(Prompt prompt) {
+        String conversationId = getConversationId();
         return getChatClient()
                 .prompt(prompt)
                 .system(getSystemPrompt())
                 .toolCallbacks(availableTools)
+                // 把会话 ID 传给记忆 Advisor：不传会用默认会话，
+                // 读到别的会话的记忆，本会话的水位线复用也不会生效
+                .advisors(a -> {
+                    if (conversationId != null) {
+                        a.param(ChatMemory.CONVERSATION_ID, conversationId);
+                    }
+                })
                 .call()
                 .chatResponse();
     }
 
     /**
      * 创建 ChatOptions，子类可覆盖以适配不同 LLM
+     * <p>
+     * 工具回调必须注册在 options 上：act() 中的 ToolCallingManager.executeToolCalls
+     * 依赖 Prompt 的 options 解析 ToolCallback，仅靠 think() 时 ChatClient 的
+     * .toolCallbacks() 运行时合并是不够的，否则会抛 No ToolCallback found。
+     * </p>
      */
     protected ChatOptions createChatOptions() {
         return DashScopeChatOptions.builder()
                 .withInternalToolExecutionEnabled(false)
+                .withToolCallbacks(List.of(availableTools))
                 .build();
     }
 
@@ -117,12 +134,14 @@ public class ToolCallAgent extends ReActAgent {
             AssistantMessage assistantMessage = chatResponse.getResult().getOutput();
             // 输出提示信息
             String result = assistantMessage.getText();
+            // 模型在发起工具调用前的自然语言推理，前端折叠区作为"思考"步骤展示
+            this.lastThinkText = (result == null || result.isBlank()) ? null : result;
             List<AssistantMessage.ToolCall> toolCallList = assistantMessage.getToolCalls();
 //            log.info(getName() + "的思考：" + result);
             log.info(getName() + "选择了" + toolCallList.size() + "个工具来使用");
             String toolCallInfo = toolCallList.stream()
                     .map(toolCall -> String.format("工具名称：%s, 工具参数：%s", toolCall.name(), toolCall.arguments()))
-                    .collect(Collectors.joining("/n"));
+                    .collect(Collectors.joining("\n"));
             log.info(toolCallInfo);
             if (toolCallList.isEmpty()) {
                 // 无工具调用时，表示任务完成，记录助手信息并结束
@@ -161,27 +180,34 @@ public class ToolCallAgent extends ReActAgent {
         ToolExecutionResult toolExecutionResult = toolCallingManager.executeToolCalls(prompt, toolCallChatResponse);
         // 记录上下文，conversationHistory 已经包含了助手消息和工具调用返回的结果
         setMessageList(toolExecutionResult.conversationHistory());
-        Message message = getMessageList().getLast();
         // 获取当前工具调用的结果
         ToolResponseMessage toolResponseMessage = (ToolResponseMessage) CollUtil.getLast(toolExecutionResult.conversationHistory());
+        // 记录本步调用的工具名列表，供 SSE 折叠区展示
+        this.lastToolNames = toolResponseMessage.getResponses().stream()
+                .map(ToolResponseMessage.ToolResponse::name)
+                .toList();
         String results = toolResponseMessage.getResponses().stream()
-                .map(toolResponse -> "工具 " + toolResponse.name() + " 完成了它的任务！结果：" + toolResponse.responseData())
+                .map(toolResponse -> "工具 " + toolResponse.name() + " 完成了它的任务！结果：" + normalizeToolResponseData(toolResponse.responseData()))
                 .collect(Collectors.joining("\n"));
         String askHumanQuestion = toolResponseMessage.getResponses().stream()
                 .filter(toolResponse -> "askHuman".equals(toolResponse.name()))
                 .map(ToolResponseMessage.ToolResponse::responseData)
+                .map(ToolCallAgent::normalizeToolResponseData)
                 .filter(responseData -> responseData.startsWith(AskHumanTool.ASK_HUMAN_PREFIX))
                 .map(responseData -> responseData.substring(AskHumanTool.ASK_HUMAN_PREFIX.length()))
                 .findFirst()
                 .orElse(null);
         if (askHumanQuestion != null) {
+            // askHuman 的提问面向用户，按最终回答渲染而不是过程步骤
+            this.lastStepKind = "answer";
             setState(AgentState.FINISHED);
             log.info("{} needs user clarification: {}", getName(), askHumanQuestion);
-            return "需要用户补充信息：" + askHumanQuestion;
+            return askHumanQuestion;
         }
         // 判断是否调用了终止工具
         if (toolResponseMessage.getResponses().stream()
                 .anyMatch(toolResponse -> "doTerminate".equals(toolResponse.name()))) {
+            this.lastStepKind = "answer";
             setState(AgentState.FINISHED);
             if (StrUtil.isNotBlank(assistantText)) {
                 return assistantText;
@@ -190,6 +216,27 @@ public class ToolCallAgent extends ReActAgent {
         }
         log.info(getName() + "的输出：" + results);
         return results;
+    }
+
+    /**
+     * 还原工具返回的原始字符串。
+     * Spring AI 默认将工具的 String 返回值做 JSON 序列化，responseData 实际带首尾引号和转义符，
+     * 直接做前缀判断（如 [ASK_HUMAN]）会永远匹配失败，必须先还原。
+     * 历史消息组装（ChatHistoryAssembler）也需要还原responseData，故声明为 public。
+     */
+    public static String normalizeToolResponseData(String responseData) {
+        if (responseData == null) {
+            return "";
+        }
+        String trimmed = responseData.trim();
+        if (trimmed.length() >= 2 && trimmed.charAt(0) == '"' && trimmed.charAt(trimmed.length() - 1) == '"') {
+            try {
+                return new ObjectMapper().readValue(trimmed, String.class);
+            } catch (JsonProcessingException e) {
+                return trimmed.substring(1, trimmed.length() - 1);
+            }
+        }
+        return responseData;
     }
 
     /**

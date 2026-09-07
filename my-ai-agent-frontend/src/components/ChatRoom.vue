@@ -1,8 +1,19 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Bot, Copy, Download, RefreshCw, Send, Square, UserRound } from 'lucide-vue-next'
+import { Bot, ChevronDown, Copy, Download, Loader2, RefreshCw, Send, Square, UserRound, Wrench } from 'lucide-vue-next'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { createSseUrl } from '@/api/client'
 import api from '@/api/client'
+
+// 工具/思考步骤明细用 markdown 渲染（配最大高度滚动），v-html 前必须过 DOMPurify
+function renderMd(text) {
+  try {
+    return DOMPurify.sanitize(marked.parse(text || '', { breaks: true }))
+  } catch {
+    return text
+  }
+}
 
 const props = defineProps({
   endpoint: { type: String, required: true },
@@ -41,6 +52,10 @@ async function loadHistory() {
         id: m.id,
         role: m.role,
         content: m.content,
+        // 历史步骤默认收起（无用时统计）
+        steps: (m.steps || []).map(s => ({ name: s.name, content: s.content })),
+        stepsCollapsed: true,
+        stepsRunning: false,
       }))
     } else {
       messages.value = [{ id: 'welcome', role: 'assistant', content: props.greeting }]
@@ -84,6 +99,31 @@ function finishWhenQueueEmpty() {
 }
 
 /* ---- SSE ---- */
+
+/** 把工具/思考事件追加到当前回答的折叠区（首次创建时展开并标记执行中） */
+function pushStep(evt) {
+  const m = messages.value.find(x => x.id === activeMsgId.value)
+  if (!m) return
+  if (!m.steps) {
+    m.steps = []
+    m.stepsCollapsed = false   // 执行中展开，让用户看到"正在干活"
+    m.stepsRunning = true
+    m.turnStartTs = Date.now()
+  }
+  m.steps.push({ name: evt.name || (evt.kind === 'think' ? '思考' : '步骤'), content: evt.content || '' })
+  scrollToBottom()
+}
+
+/** 流结束（完成/停止）时收起折叠区并计算用时 */
+function collapseSteps() {
+  const m = messages.value.find(x => x.id === activeMsgId.value)
+  if (m && m.steps && m.steps.length) {
+    m.stepsRunning = false
+    m.stepsCollapsed = true
+    m.stepsDuration = m.turnStartTs ? Math.max(1, Math.round((Date.now() - m.turnStartTs) / 1000)) : null
+  }
+}
+
 function sendMessage() {
   const text = input.value.trim()
   if (!text || isStreaming.value) return
@@ -115,7 +155,24 @@ function sendMessage() {
       connectionState.value = 'open'
     }
     es.onmessage = (e) => {
-      if (e.data === '[DONE]' || e.data === 'DONE') { finishStream(); return }
+      if (e.data === '[DONE]' || e.data === 'DONE') { collapseSteps(); finishStream(); return }
+      let evt = null
+      try { evt = JSON.parse(e.data) } catch { evt = null }
+      if (evt && evt.event === 'step') { pushStep(evt); return }
+      if (evt && evt.event === 'error') {
+        const m = messages.value.find(x => x.id === activeMsgId.value)
+        if (m) m.content += (m.content ? '\n' : '') + (evt.content || '执行出错')
+        collapseSteps()
+        finishStream()
+        return
+      }
+      if (evt && evt.event === 'answer') {
+        pendingText.value += evt.content || ''
+        if (!typingTimer.value) runTypewriter(aiMsg)
+        scrollToBottom()
+        return
+      }
+      // 旧协议兜底：未改造的端点（如 LoveApp）发纯文本，按回答处理
       pendingText.value += typeof e.data === 'string' ? e.data : ''
       if (!typingTimer.value) runTypewriter(aiMsg)
       scrollToBottom()
@@ -138,12 +195,14 @@ function sendMessage() {
 
 function finishStream() {
   if (eventSource.value) { eventSource.value.close(); eventSource.value = null }
+  collapseSteps()
   finishWhenQueueEmpty()
 }
 
 function stopStreaming() {
   if (eventSource.value) { eventSource.value.close(); eventSource.value = null }
   clearTypewriter()
+  collapseSteps()
   isStreaming.value = false
   connectionState.value = 'idle'
   activeMsgId.value = null
@@ -250,7 +309,7 @@ onBeforeUnmount(() => {
       <TransitionGroup name="fade">
         <div
           v-for="msg in messages"
-          v-show="msg.content"
+          v-show="msg.content || (msg.steps && msg.steps.length)"
           :key="msg.id"
           :class="['message', msg.role]"
         >
@@ -258,26 +317,48 @@ onBeforeUnmount(() => {
             <UserRound v-if="msg.role === 'user'" :size="16" />
             <Bot v-else :size="16" />
           </div>
-          <div class="message-bubble">
-            <div class="message-text">{{ msg.content }}</div>
-            <!-- 流式加载动画 -->
-            <span v-if="msg.id === activeMsgId && isStreaming" class="typing-cursor">|</span>
-            <button
-              v-if="msg.role === 'assistant' && extractPdfName(msg.content)"
-              class="pdf-btn"
-              @click="downloadPdf(extractPdfName(msg.content))"
-              title="下载 PDF"
-            >
-              <Download :size="14" />
-            </button>
-            <button
-              v-if="msg.role === 'assistant' && msg.content && msg.id !== activeMsgId"
-              class="copy-btn"
-              @click="copyMessage(msg.content)"
-              title="复制"
-            >
-              <Copy :size="13" />
-            </button>
+          <div class="message-main">
+            <!-- 工具/思考折叠条：执行中展开，结束后自动收起 -->
+            <div v-if="msg.steps && msg.steps.length" class="steps-collapse">
+              <div class="steps-header" @click="msg.stepsCollapsed = !msg.stepsCollapsed">
+                <Loader2 v-if="msg.stepsRunning" :size="13" class="spin" />
+                <Wrench v-else :size="13" />
+                <span v-if="msg.stepsRunning">
+                  正在执行：{{ msg.steps[msg.steps.length - 1].name }}…
+                </span>
+                <span v-else>
+                  已执行 {{ msg.steps.length }} 步<template v-if="msg.stepsDuration">（用时 {{ msg.stepsDuration }} 秒）</template>
+                </span>
+                <ChevronDown :size="14" :class="['chevron', { open: !msg.stepsCollapsed }]" />
+              </div>
+              <div v-show="!msg.stepsCollapsed" class="steps-body">
+                <div v-for="(s, i) in msg.steps" :key="i" class="step-item">
+                  <div class="step-name">{{ i + 1 }}. {{ s.name }}</div>
+                  <div class="step-content" v-html="renderMd(s.content)" />
+                </div>
+              </div>
+            </div>
+            <div v-show="msg.content" class="message-bubble">
+              <div class="message-text">{{ msg.content }}</div>
+              <!-- 流式加载动画 -->
+              <span v-if="msg.id === activeMsgId && isStreaming" class="typing-cursor">|</span>
+              <button
+                v-if="msg.role === 'assistant' && extractPdfName(msg.content)"
+                class="pdf-btn"
+                @click="downloadPdf(extractPdfName(msg.content))"
+                title="下载 PDF"
+              >
+                <Download :size="14" />
+              </button>
+              <button
+                v-if="msg.role === 'assistant' && msg.content && msg.id !== activeMsgId"
+                class="copy-btn"
+                @click="copyMessage(msg.content)"
+                title="复制"
+              >
+                <Copy :size="13" />
+              </button>
+            </div>
           </div>
         </div>
       </TransitionGroup>
@@ -382,13 +463,58 @@ onBeforeUnmount(() => {
   color: var(--text-muted);
 }
 .message.user .message-avatar { background: var(--accent); color: #fff; }
-.message-bubble {
+/* 头像右侧的主列：折叠条在上、气泡在下 */
+.message-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   max-width: 70%;
+  min-width: 0;
+}
+.message.user .message-main { align-items: flex-end; }
+.message-bubble {
+  max-width: 100%;
   padding: 12px 16px;
   border-radius: var(--radius);
   position: relative;
   transition: box-shadow .2s;
 }
+
+/* ---- 工具/思考折叠条 ---- */
+.steps-collapse {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--bg-hover);
+  overflow: hidden;
+}
+.steps-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.steps-header:hover { color: var(--text); }
+.chevron { margin-left: auto; transition: transform .2s; }
+.chevron.open { transform: rotate(180deg); }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.steps-body {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px 12px 10px;
+  border-top: 1px dashed var(--border);
+}
+.step-item { margin-top: 8px; }
+.step-name { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.step-content { font-size: 12.5px; line-height: 1.6; color: var(--text-muted); word-break: break-word; }
+.step-content :deep(p) { margin: 0 0 6px; }
+.step-content :deep(pre) { background: var(--bg); padding: 8px; border-radius: 6px; overflow-x: auto; }
+.step-content :deep(code) { font-size: 12px; }
 .message.assistant .message-bubble {
   background: var(--bg-card);
   border: 1px solid var(--border);

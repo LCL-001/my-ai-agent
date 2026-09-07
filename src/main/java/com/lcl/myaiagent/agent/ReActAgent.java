@@ -4,6 +4,8 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.ArrayList;
+
 /**
  * ReAct智能体抽象基类，继承自BaseAgent
  * <p>
@@ -53,12 +55,17 @@ public abstract class ReActAgent extends BaseAgent {
      */
     @Override
     public String step() {
+        // 每步重置分类：think() 返回 false 走 answer（最终回答），act() 走 tool（过程步）
+        this.lastStepKind = "answer";
+        this.lastThinkText = null;
+        this.lastToolNames = new ArrayList<>();
         try {
             boolean shouldAct = this.think();
             if (!shouldAct) {
                 // 如果不需要执行行动，则返回最后一条助手消息
                 return getMessageList().getLast().getText();
             }
+            this.lastStepKind = "tool";
             return this.act();
         } catch (Exception e) {
             // 记录异常日志

@@ -9,6 +9,7 @@ import com.lcl.myaiagent.model.vo.ChatMessageVO;
 import com.lcl.myaiagent.model.vo.ConversationVO;
 import com.lcl.myaiagent.service.ChatMessageService;
 import com.lcl.myaiagent.service.ConversationService;
+import com.lcl.myaiagent.utils.ChatHistoryAssembler;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -121,19 +122,12 @@ public class ConversationController {
         if (!conversationService.belongsToUser(conversationId, loginUser.getId())) {
             return ResultUtils.error(ErrorCode.NOT_FOUND_ERROR, "会话不存在或无权访问");
         }
+        // 按 id 排序 + 组装成"轮"结构（内部提示/工具步骤归组、askHuman 还原），见 ChatHistoryAssembler
         List<ChatMessage> messages = chatMessageService.lambdaQuery()
                 .eq(ChatMessage::getConversationId, conversationId)
-                .orderByAsc(ChatMessage::getCreateTime)
+                .orderByAsc(ChatMessage::getId)
                 .list();
-        List<ChatMessageVO> voList = messages.stream()
-                .map(m -> ChatMessageVO.builder()
-                        .id(String.valueOf(m.getId()))
-                        .role(m.getMessageType().name().equals("USER") ? "user" : "assistant")
-                        .content(m.getContent())
-                        .createTime(m.getCreateTime())
-                        .build())
-                .toList();
-        return ResultUtils.success(voList);
+        return ResultUtils.success(ChatHistoryAssembler.assemble(messages));
     }
 
     @Data

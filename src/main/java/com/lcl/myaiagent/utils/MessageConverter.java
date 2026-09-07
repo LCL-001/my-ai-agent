@@ -15,6 +15,7 @@ import java.util.Map;
 public class MessageConverter {
 
     private static final String TOOL_RESPONSES_KEY = "toolResponses";
+    private static final String TOOL_CALLS_KEY = "toolCalls";
 
     /**
      * 将Spring AI的Message对象转换为内部ChatMessage实体
@@ -29,9 +30,27 @@ public class MessageConverter {
         ChatMessage chatMessage = new ChatMessage();
         chatMessage.setConversationId(conversationId);
         chatMessage.setMessageType(message.getMessageType());
-        chatMessage.setContent(message.getText());
+        // content 列为 NOT NULL，工具调用类消息的文本可能为 null，这里统一兜底
+        chatMessage.setContent(message.getText() != null ? message.getText() : "");
 
         Map<String, Object> metadata = new HashMap<>(message.getMetadata());
+        // 将 AssistantMessage.toolCalls 序列化到 metadata，否则历史回放后 tool 响应失去前导的 tool_calls，下一轮请求会被模型拒绝
+        if (message instanceof AssistantMessage assistantMsg) {
+            List<AssistantMessage.ToolCall> toolCalls = assistantMsg.getToolCalls();
+            if (toolCalls != null && !toolCalls.isEmpty()) {
+                List<Map<String, String>> serialized = toolCalls.stream()
+                        .map(tc -> {
+                            Map<String, String> m = new HashMap<>();
+                            m.put("id", tc.id());
+                            m.put("type", tc.type());
+                            m.put("name", tc.name());
+                            m.put("arguments", tc.arguments());
+                            return m;
+                        })
+                        .toList();
+                metadata.put(TOOL_CALLS_KEY, serialized);
+            }
+        }
         // 将 ToolResponseMessage.responses 序列化到 metadata
         if (message instanceof ToolResponseMessage toolMsg) {
             List<ToolResponseMessage.ToolResponse> responses = toolMsg.getResponses();
@@ -64,16 +83,51 @@ public class MessageConverter {
         MessageType messageType = chatMessage.getMessageType();
         String text = chatMessage.getContent();
         Map<String, Object> metadata = chatMessage.getMetadata();
+        if (metadata == null) {
+            metadata = new HashMap<>();
+        }
 
         return switch (messageType) {
             case USER -> new UserMessage(text);
-            case ASSISTANT -> AssistantMessage.builder().content(text).properties(metadata).build();
+            case ASSISTANT -> {
+                AssistantMessage.Builder builder = AssistantMessage.builder()
+                        .content(text)
+                        .properties(metadata);
+                List<AssistantMessage.ToolCall> toolCalls = deserializeToolCalls(metadata);
+                if (!toolCalls.isEmpty()) {
+                    builder.toolCalls(toolCalls);
+                }
+                yield builder.build();
+            }
             case SYSTEM -> new SystemMessage(text);
             case TOOL -> {
                 List<ToolResponseMessage.ToolResponse> responses = deserializeToolResponses(metadata);
                 yield ToolResponseMessage.builder().metadata(metadata).responses(responses).build();
             }
         };
+    }
+
+    /**
+     * 从 metadata 中反序列化 ToolCall 列表
+     */
+    @SuppressWarnings("unchecked")
+    private static List<AssistantMessage.ToolCall> deserializeToolCalls(Map<String, Object> metadata) {
+        Object raw = metadata.get(TOOL_CALLS_KEY);
+        if (!(raw instanceof List<?> list) || list.isEmpty()) {
+            return List.of();
+        }
+        List<AssistantMessage.ToolCall> result = new ArrayList<>();
+        for (Object item : list) {
+            if (item instanceof Map<?, ?> m) {
+                result.add(new AssistantMessage.ToolCall(
+                        (String) m.get("id"),
+                        (String) m.get("type"),
+                        (String) m.get("name"),
+                        (String) m.get("arguments")
+                ));
+            }
+        }
+        return result.isEmpty() ? List.of() : result;
     }
 
     /**
