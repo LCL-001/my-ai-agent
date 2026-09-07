@@ -26,3 +26,5 @@ spring:
 app:
   vector:
     enabled: ${VECTOR_ENABLED:false}
+search-api:
+  api-key: ${SEARCH_API_KEY:}

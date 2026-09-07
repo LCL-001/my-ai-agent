@@ -54,13 +54,13 @@ class LoveAppTest {
      * 测试基于RAG（检索增强生成）的聊天功能
      * 验证系统能够从知识库中检索相关信息来回答用户的情感问题
      */
-    @Test
-    void doChatWithRag() {
-        String chatId = UUID.randomUUID().toString();
-        String message = "我已经结婚了，但是婚后关系不太亲密，怎么办？";
-        String answer =  loveApp.doChatWithRag(message, chatId);
-        Assertions.assertNotNull(answer);
-    }
+//    @Test
+//    void doChatWithRag() {
+//        String chatId = UUID.randomUUID().toString();
+//        String message = "我已经结婚了，但是婚后关系不太亲密，怎么办？";
+////        String answer =  loveApp.doChatWithRag(message, chatId);
+//        Assertions.assertNotNull(answer);
+//    }
 
 
 

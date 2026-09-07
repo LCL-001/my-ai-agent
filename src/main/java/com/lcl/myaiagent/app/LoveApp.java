@@ -170,9 +170,12 @@ public class LoveApp {
     }
 
 
+    // [LOCAL-ONLY-DISABLED] 旧版本地向量存储已停用（见 LoveAppVectorStoreConfig），待新本地 RAG 管线替换，恢复时取消注释
+    /*
     @Autowired(required = false)
     @Qualifier("loveAppVectorStore")
     private VectorStore loveAppVectorStore;
+    */
 
     /**
      * 执行基于本地知识库的RAG（检索增强生成）聊天对话
@@ -182,6 +185,8 @@ public class LoveApp {
      * @param conversationId 会话唯一标识，用于区分不同用户的对话上下文
      * @return String AI结合知识库生成的回复内容
      */
+    // [LOCAL-ONLY-DISABLED] 依赖已停用的 loveAppVectorStore，调用会 NPE；待新本地 RAG 管线替换，恢复时取消注释
+    /*
     // 启用本地知识库服务
     public String doChatWithRag(String message, String conversationId) {
         ChatResponse chatResponse = chatClient
@@ -201,11 +206,15 @@ public class LoveApp {
         log.info("content: {}", content);
         return content;
     }
+    */
 
 
+    // [LOCAL-ONLY-DISABLED] DashScope 云端知识库 Advisor 已停用（见 LoveAppRagCloudAdvisorConfig），恢复时取消注释
+    /*
     @Autowired(required = false)
     @Qualifier("loveAppRagCloudAdvisor")
     private Advisor loveAppRagCloudAdvisor;
+    */
 
     /**
      * 执行基于云端知识库的RAG（检索增强生成）聊天对话
@@ -215,6 +224,8 @@ public class LoveApp {
      * @param conversationId 会话唯一标识，用于区分不同用户的对话上下文
      * @return String AI结合云端知识库生成的回复内容
      */
+    // [LOCAL-ONLY-DISABLED] 依赖已停用的 loveAppRagCloudAdvisor，调用会 NPE；恢复时取消注释
+    /*
     // 启用云知识库服务
     public String doChatWithCloudRag(String message, String conversationId) {
         ChatResponse chatResponse = chatClient
@@ -231,6 +242,7 @@ public class LoveApp {
         log.info("content: {}", content);
         return content;
     }
+    */
 
     @Resource
     private ToolCallback[] allTools;

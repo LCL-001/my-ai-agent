@@ -1,5 +1,6 @@
 package com.lcl.myaiagent.tools;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
@@ -8,9 +9,7 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * 网络搜索工具类
@@ -51,24 +50,49 @@ public class WebSearchTool {
     @Tool(description = "Search for information from Baidu Search Engine")
     public String searchWeb(
             @ToolParam(description = "Search query keyword") String query) {
+        // Key 缺失时明确告知配置方法，避免模型反复重试
+        if (StrUtil.isBlank(apiKey)) {
+            return "Error searching Baidu: Search API key is not configured. "
+                    + "Please set the SEARCH_API_KEY environment variable and restart the application.";
+        }
         // 构建搜索请求参数，包括查询词、API密钥和搜索引擎类型
         Map<String, Object> paramMap = new HashMap<>();
         paramMap.put("q", query);
         paramMap.put("api_key", apiKey);
         paramMap.put("engine", "baidu");
         try {
-            String response = HttpUtil.get(SEARCH_API_URL, paramMap);
-            // 解析响应JSON并提取前5条有机搜索结果
+            // 显式超时，避免单次工具调用长时间挂起拖垮整个执行步骤
+            String response = HttpUtil.get(SEARCH_API_URL, paramMap, 15000);
             JSONObject jsonObject = JSONUtil.parseObj(response);
-            // 提取 organic_results 部分
+            // Key 无效、额度用尽等场景接口会返回 error 字段，把真实原因交给模型决策
+            String apiError = jsonObject.getStr("error");
+            if (StrUtil.isNotBlank(apiError)) {
+                return "Error searching Baidu: " + apiError;
+            }
             JSONArray organicResults = jsonObject.getJSONArray("organic_results");
-            List<Object> objects = organicResults.subList(0, 5);
-            // 将搜索结果对象转换为JSON字符串并用逗号拼接
-            String result = objects.stream().map(obj -> {
-                JSONObject tmpJSONObject = (JSONObject) obj;
-                return tmpJSONObject.toString();
-            }).collect(Collectors.joining(","));
-            return result;
+            if (organicResults == null || organicResults.isEmpty()) {
+                return "No results found for: " + query;
+            }
+            // 输出结构化文本（标题/摘要/日期/链接），便于模型直接阅读和引用
+            StringBuilder result = new StringBuilder();
+            int limit = Math.min(5, organicResults.size());
+            for (int i = 0; i < limit; i++) {
+                JSONObject item = (JSONObject) organicResults.get(i);
+                result.append(i + 1).append(". ").append(item.getStr("title", ""));
+                String snippet = item.getStr("snippet");
+                if (StrUtil.isNotBlank(snippet)) {
+                    result.append(" - ").append(snippet);
+                }
+                String date = item.getStr("date");
+                if (StrUtil.isNotBlank(date)) {
+                    result.append(" (").append(date).append(')');
+                }
+                result.append("\n   ").append(item.getStr("link", ""));
+                if (i < limit - 1) {
+                    result.append('\n');
+                }
+            }
+            return result.toString();
         } catch (Exception e) {
             return "Error searching Baidu: " + e.getMessage();
         }

@@ -7,7 +7,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-@Configuration
+// [LOCAL-ONLY-DISABLED] pgvector 专用数据源：全本地化改造（不使用向量数据库）暂时停用，恢复时取消注释
+//@Configuration
 @ConditionalOnProperty(value = "app.vector.enabled", havingValue = "true")
 public class VectorDataSourceConfig {
 

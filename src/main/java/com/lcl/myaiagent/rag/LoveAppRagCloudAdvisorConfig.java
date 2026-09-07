@@ -17,7 +17,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
  * 恋爱应用RAG云顾问配置类
  * 配置基于阿里云DashScope的检索增强生成(RAG) Advisor
  */
-@Configuration
+// [LOCAL-ONLY-DISABLED] DashScope 云端知识库 Advisor：全本地化改造（不使用云端知识库）暂时停用，恢复时取消注释
+//@Configuration
 @Slf4j
 @ConditionalOnProperty(name = "app.legacy-love.enabled", havingValue = "true")
 class LoveAppRagCloudAdvisorConfig {

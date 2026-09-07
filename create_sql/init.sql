@@ -49,3 +49,11 @@ create table if not exists `conversation`
 ALTER TABLE `conversation`
     ADD COLUMN `type` VARCHAR(20) DEFAULT 'manus' NOT NULL COMMENT '会话类型: manus/love'
         AFTER `user_id`;
+
+CREATE TABLE chat_summary (
+                              id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+                              chat_id         VARCHAR(64) NOT NULL,
+                              summary         TEXT,          -- 压缩出的摘要文本
+                              last_message_id BIGINT,        -- 水位线：已压缩到哪条消息（含）
+                              UNIQUE KEY uk_chat_id (chat_id) -- 一个会话一条摘要，重复压缩走更新
+);

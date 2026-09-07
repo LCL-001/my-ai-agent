@@ -5,8 +5,10 @@ target/
 !**/src/test/**/target/HELP.md
 !**/src/test/**/target/
 
+doc
 tmp
 application-local.yaml
+application-prod.yaml
 mcp-servers.json
 
 ### demo package ###

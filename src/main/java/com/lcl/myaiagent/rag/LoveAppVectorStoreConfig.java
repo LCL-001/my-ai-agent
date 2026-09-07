@@ -12,7 +12,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
  * 向量存储配置类
  * 负责配置和初始化基于内存的简单向量存储，用于存储和检索文档向量
  */
-@Configuration
+// [LOCAL-ONLY-DISABLED] 旧版内存向量存储：每次启动全量重嵌入，已被全本地化改造停用；恢复时取消注释
+//@Configuration
 @RequiredArgsConstructor
 @ConditionalOnProperty(name = "app.legacy-love.enabled", havingValue = "true")
 public class LoveAppVectorStoreConfig {
