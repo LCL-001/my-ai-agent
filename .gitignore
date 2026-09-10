@@ -2,7 +2,6 @@ HELP.md
 target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
-!**/src/test/**/target/HELP.md
 !**/src/test/**/target/
 
 doc
@@ -10,49 +9,25 @@ tmp
 application-local.yaml
 application-prod.yaml
 mcp-servers.json
-
-### demo package ###
-**/demo/
-**/demo/*
-
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
 CLAUDE.md
 .env
 
-### VS Code ###
-.vscode/
 ### demo package ###
 **/demo/
 **/demo/*
 
+### 运行产物，不进版本库 ###
+*.log
+memlines.txt
 
-tmp
-application-local.yaml
-mcp-servers.json
+### 私有知识库上传目录 ###
+# 这里存的是运行时上传的资料（个人简历、面试准备笔记等），
+# 一旦提交会随仓库公开，务必保持忽略。
+data/
+
+### 内部工作文档，不对外发布 ###
+# AI 工作流计划书等过程稿，与项目对外说明无关。
+docs/superpowers/
 
 ### STS ###
 .apt_generated
