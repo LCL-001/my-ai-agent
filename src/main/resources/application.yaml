@@ -35,7 +35,9 @@
     url: ${MYSQL_URL:jdbc:mysql://localhost:3306/yu-ai-agent}
     username: ${MYSQL_USERNAME:root}
     password: ${MYSQL_PASSWORD:123456}
-#    url: jdbc:postgresql://rm-cn-cq74sgsb50001ywo.rwlb.rds.aliyuncs.com/yu_ai_agent
+#    # 向量库（pgvector）已随本地化改造停用。需要时通过环境变量注入连接串，
+#    # 不要在仓库里写具体的云实例地址。
+#    url: ${VECTOR_DB_URL:jdbc:postgresql://localhost:5432/yu_ai_agent_vector}
 #    username: your username
 #    password: your password
   servlet:
